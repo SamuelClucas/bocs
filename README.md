@@ -1,6 +1,5 @@
 # SimEngine
-<br />
-### A Rust-based 3D scientific simulation engine...
+A _Rust-based_ 3D scientific simulation engine...
 
 ## Vision:
 With the advent of deep machine learning techniques giving rise to tools like [AlphaFold](https://alphafold.ebi.ac.uk/), challenges that once seemed impossible - like de novo protein design - now enter into feasibility. It's only natural to imagine what else might be possible. 
