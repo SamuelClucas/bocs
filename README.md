@@ -1,7 +1,7 @@
-# Digi-Lab
+# Digi-Lab  
+<img width="400" height="400" alt="logo" src="https://github.com/user-attachments/assets/d6b95cba-d50a-4863-978d-981848007c51" />
 ## A _Rust-based_ 3D scientific simulation engine...  
-<img width="500" height="500" alt="logo" src="https://github.com/user-attachments/assets/d6b95cba-d50a-4863-978d-981848007c51" />
-
+  
 ### Vision:
 With the advent of deep machine learning techniques giving rise to tools like [AlphaFold](https://alphafold.ebi.ac.uk/), challenges that once seemed impossible - like de novo protein design - now enter into feasibility. It's only natural to imagine what else might be possible.  
   
