@@ -16,13 +16,13 @@ I ask myself this: how can I contribute?
 - awareness of physics and chemistry
 - BSc 1:1 in biological sciences from Durham University
 
-### My Interests:
-I am fascinated by the 'what?' and 'how?' of things. More importantly, I won't stop chasing the answers- an attempt at control amidst the unrelenting chaos of the universe.
-<br /> 
-I believe I am uniquely positioned to design an _in-silico_ cell simulation platform (wetlab isn't my strongest asset). In particular, I am interested in modelling membrane physics at the mesoscopic scale, prioritising both performance and realism. To do so, I am switching from my beloved C++ to Rust. The language enforces solid program design, is memory-safe, and also incredibly performant. 
-<br />
-This is going to be a real challenge. I do not want to use a high-level graphical library or game-engine, like [`bevy`](https://bevy.org/learn/book/getting-started/), for example. I want to fully own my code, which empowers me as a researcher in a few ways:
-1. I intimately understand the tool because I built it -
+### My Interests:  
+I am fascinated by the 'what?' and 'how?' of things. More importantly, I won't stop chasing the answers- an attempt at control amidst the unrelenting chaos of the universe.  
+  
+I believe I am uniquely positioned to design an _in-silico_ cell simulation platform (wetlab isn't my strongest asset). In particular, I am interested in modelling membrane physics at the mesoscopic scale, prioritising both performance and realism. To do so, I am switching from my beloved C++ to Rust. The language enforces solid program design, is memory-safe, and also incredibly performant.  
+  
+This is going to be a real challenge. I do not want to use a high-level graphical library or game-engine, like [`bevy`](https://bevy.org/learn/book/getting-started/), for example. I want to fully own my code, which empowers me as a researcher in a few ways:  
+1. I intimately understand the tool because I built it
 2. Because of the above, I understand its limitations
-3. In Digi-Lab, I am god. I can continue to develop its features, hopefully converging on something special...
-For these reasons, I am writing the simulation engine in [`wgpu`](https://docs.rs/wgpu/latest/wgpu/), Rust's flagship graphics library. Its documentation is robust, as is its code, from which I hope to learn and become a better systems architect.
+3. In Digi-Lab, I am god. I can continue to develop its features, hopefully converging on something special...  
+For these reasons, I am writing the simulation engine in [`wgpu`](https://docs.rs/wgpu/latest/wgpu/), Rust's flagship graphics library. Its documentation is robust, as is its code, from which I hope to learn and become a better systems architect. I plan to take advantage of parallel computation (GPU-acceleration) wherever practical to expand the engine's capabilities as much as possible.  
