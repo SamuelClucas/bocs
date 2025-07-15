@@ -13,7 +13,7 @@ I ask myself this: how can I contribute?
   
 ### My Skills:  
 - programming and project documentation
-- understanding of mathematical fundamentals
+- grasp of fundamental mathematics
 - awareness of physics and chemistry
 - BSc 1:1 in biological sciences from Durham University
 
