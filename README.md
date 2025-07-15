@@ -1,2 +1,8 @@
 # SimEngine
-Development of a Rust-based 3D scientific visualisation/experimentation platform.
+<br />
+### A Rust-based 3D scientific simulation engine...
+
+##### Vision:
+<br />
+
+
