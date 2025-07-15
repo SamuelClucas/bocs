@@ -1,5 +1,5 @@
 # Digi-Lab  
-<img width="400" height="400" alt="logo" src="https://github.com/user-attachments/assets/d6b95cba-d50a-4863-978d-981848007c51" />
+<img width="400" height="400" alt="logo" src="https://github.com/user-attachments/assets/d6b95cba-d50a-4863-978d-981848007c51" />  
 ## A _Rust-based_ 3D scientific simulation engine...  
   
 ### Vision:
