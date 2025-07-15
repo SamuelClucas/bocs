@@ -28,5 +28,6 @@ I believe I am uniquely positioned to design an _in-silico_ cell simulation plat
 I do not want to use a high-level graphical library or game-engine, like [`bevy`](https://bevy.org/learn/book/getting-started/), for example. I want to fully own my code, which empowers me as a researcher in a few ways:  
 1. I intimately understand the tool because I built it
 2. Because of the above, I understand its limitations
-3. In Digi-Lab, I am god. I can continue to develop its features, hopefully converging on something special...  
+3. In Digi-Lab, I am god. I can continue to develop its features, hopefully converging on something special...
+  
 For these reasons, I am writing the simulation engine in [`wgpu`](https://docs.rs/wgpu/latest/wgpu/), Rust's flagship graphics library. Its documentation is robust, as is its code, from which I hope to learn and become a better systems architect. I plan to take advantage of parallel computation (GPU-acceleration) wherever practical to expand the engine's capabilities as much as possible.  
