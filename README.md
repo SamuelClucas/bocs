@@ -18,9 +18,10 @@ I ask myself this: how can I contribute?
 - BSc 1:1 in biological sciences from Durham University
 
 ### My Interests:  
-I am fascinated by the 'what?' and 'how?' of things. More importantly, I won't stop chasing the answers- an attempt at control amidst the unrelenting chaos of the universe.  
+I am fascinated by the 'what?' and 'how?' of things. More importantly, I won't stop chasing the answers - my attempt at control amidst the unrelenting chaos of the universe.  
   
-I believe I am uniquely positioned to design an _in-silico_ cell simulation platform (wetlab isn't my strongest asset). In particular, I am interested in modelling membrane physics at the mesoscopic scale, prioritising both performance and realism. To do so, I am switching from my beloved C++ to Rust. The language enforces solid program design, is memory-safe, and also incredibly performant.  
+I believe I am uniquely positioned to design an _in-silico_ cell simulation platform - wetlab isn't my strongest asset...  
+In particular, **I am interested in modelling membrane physics at the mesoscopic scale**, prioritising both **performance** and **realism**. To do so, I am switching from my beloved C++ to Rust. The language enforces solid program design, is memory-safe, and also incredibly performant.  
 
 > [!CAUTION]
 > This is going to be a real challenge.  
