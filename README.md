@@ -1,5 +1,5 @@
 # 📦 bocs
-<img width="1600" height="1600" alt="logo" src="https://github.com/user-attachments/assets/468adec1-f8df-4930-afe5-edf96dc418ce" /><br />
+<img width="600" height="600" alt="logo" src="https://github.com/user-attachments/assets/468adec1-f8df-4930-afe5-edf96dc418ce" /><br />
 ## A 3D scientific simulation engine... built with Rust! 
   
 ### Vision:
