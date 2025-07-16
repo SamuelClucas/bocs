@@ -21,6 +21,7 @@ pub struct App {
 
 /// implements ApplicationHandler for logical App
 impl ApplicationHandler for App {
+    // TODO: traits can't implement async yet, move .await outside resumed()
     async fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = Window::default_attributes()
                 .with_title("📦")
