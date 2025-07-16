@@ -12,9 +12,9 @@ As a consequence of this, I will also be learning lots about:
 - API abstraction and design patterns (systems design)
 - and more!
   
-I need a place to keep track of it all. *This is that place*.
+I needed a place to keep track of it all. *This is that place*.
 
-I have tried to write notes that are accessible, explicit, and precise. Please read them if you want to better understand any of the concepts or code involved in the creation of such a program.
+I've written notes that feel approachable, explicit, and precise. Please read them if you want to better understand any of the concepts or code involved in the creation of such a program.
 
 ### Contents:
 1. [Winit](https://docs.rs/winit/latest/winit/index.html)  
