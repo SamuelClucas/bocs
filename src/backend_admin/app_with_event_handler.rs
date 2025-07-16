@@ -21,7 +21,6 @@ pub struct App {
 
 /// implements ApplicationHandler for logical App
 impl ApplicationHandler for App {
-    #[tokio::main] // this is for async! see here: https://rust-lang.github.io/async-book/part-guide/async-await.html
     async fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = Window::default_attributes()
                 .with_title("📦")
@@ -41,7 +40,7 @@ impl ApplicationHandler for App {
         let adapter_wan = (graphics_instance.request_adapter(&request_adapter_options)).await.unwrap(); // logical *handle* for physical GPU!
         
         // device descriptor and request (device, queue)
-        let desc = DeviceDescriptor {
+        let desc = DeviceDescriptor { // TODO: REWRITE WITH BIT FLAGS THIS SYNTAX IS INCORRECT
             required_features: Features {features_wgpu: {FeaturesWGPU::POLYGON_MODE_POINT; 
                                                         FeaturesWGPU::STORAGE_RESOURCE_BINDING_ARRAY; 
                                                         FeaturesWGPU::BUFFER_BINDING_ARRAY;

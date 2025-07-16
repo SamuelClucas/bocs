@@ -9,7 +9,8 @@ use crate::backend_admin::app_with_event_handler::App;
 // TODO: put comments in docs/? feels messy right now
 /// This spins up the the simulation engine
 /// See winit and wgpu docs for more information
-fn main() {
+#[tokio::main] // this is for async! see here: https://rust-lang.github.io/async-book/part-guide/async-await.html
+async fn main() { // see async in backend_admin/app_with_event_handler 
     // The EventLoop interfaces with the OS 
     // Tracking WindowEvent and DeviceEvent events...
     let event_loop = EventLoop::new().unwrap(); // not an active event loop, need proxy for custom window config
