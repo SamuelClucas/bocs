@@ -5,7 +5,7 @@ use winit::{
     }, 
 };
 mod backend_admin;
-use crate::backend_admin::app_and_event_handler::App;
+use crate::backend_admin::app_with_event_handler::App;
 // TODO: put comments in docs/? feels messy right now
 /// This spins up the the simulation engine
 /// See winit and wgpu docs for more information
