@@ -16,6 +16,7 @@ pub enum Outcome {
 /// App implements ApplicationHandler for resuming of app, WindowEvent handling \n
 #[derive(Default)]
 pub struct App {
+    setup: bool,
     proxy: Option<EventLoopProxy<Outcome>>,
     window: Option<Window>, 
    device: Option<Device>,
@@ -25,6 +26,7 @@ pub struct App {
 impl  App  {
     pub fn new (prox: EventLoopProxy<Outcome>) -> App {
         App  {
+            setup: true,
             proxy:  Some(prox), // smuggle proxy into app for downstream requests
             window: None,
             device: None,
@@ -35,46 +37,48 @@ impl  App  {
 /// implements ApplicationHandler for logical App
 impl ApplicationHandler<Outcome> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if (self.setup) {
+            let window_attributes = Window::default_attributes()
+                    .with_title("📦")
+                    .with_blur(true);
+            self.window = Some(event_loop.create_window(window_attributes).expect("\x1b[1;31mError creating window\x1b[0m\n"));
+        // neither of these worked    let inst_descriptor = InstanceDescriptor::from_env_or_default().with_env();
+            //let inst_descriptor = InstanceDescriptor::with_env(self);
+            let inst_descriptor = InstanceDescriptor { backends: (wgpu::Backends::METAL), ..Default::default()};
+            let graphics_instance = Instance::new(&inst_descriptor);
 
-        let window_attributes = Window::default_attributes()
-                .with_title("📦")
-                .with_blur(true);
-        self.window = Some(event_loop.create_window(window_attributes).expect("\x1b[1;31mError creating window\x1b[0m\n"));
-    // neither of these worked    let inst_descriptor = InstanceDescriptor::from_env_or_default().with_env();
-        //let inst_descriptor = InstanceDescriptor::with_env(self);
-        let inst_descriptor = InstanceDescriptor { backends: (wgpu::Backends::METAL), ..Default::default()};
-        let graphics_instance = Instance::new(&inst_descriptor);
+            let surf = graphics_instance.create_surface(self.window.as_ref().unwrap()).expect("\x1b[1;32mError creating surface\x1b[0m\n"); // used to wrap window
+            let request_adapter_options = RequestAdapterOptions { // see here for an explanation of each option :) https://gpuweb.github.io/gpuweb/#dictdef-gpurequestadapteroptions
+                power_preference: PowerPreference::None,
+                force_fallback_adapter: false,
+                compatible_surface: Some(&surf)
+            };
+            
+            // device descriptor and request (device, queue)
+            let desc = DeviceDescriptor { 
+                required_features: Features {features_wgpu: FeaturesWGPU::empty(),
+                                            features_webgpu: FeaturesWebGPU::DEPTH_CLIP_CONTROL}, // only request what you require (see about OptionalCapabilities - limits and features - here: https://gpuweb.github.io/gpuweb/#feature also https://gpuweb.github.io/gpuweb/#feature-index)
+                required_limits: Limits::downlevel_defaults(),
+                trace: Trace::Off,
+                memory_hints: MemoryHints::Performance,
+                label: Some("wan adapter")
 
-        let surf = graphics_instance.create_surface(self.window.as_ref().unwrap()).expect("\x1b[1;32mError creating surface\x1b[0m\n"); // used to wrap window
-        let request_adapter_options = RequestAdapterOptions { // see here for an explanation of each option :) https://gpuweb.github.io/gpuweb/#dictdef-gpurequestadapteroptions
-            power_preference: PowerPreference::None,
-            force_fallback_adapter: false,
-            compatible_surface: Some(&surf)
-        };
-         
-        // device descriptor and request (device, queue)
-        let desc = DeviceDescriptor { 
-            required_features: Features {features_wgpu: FeaturesWGPU::empty(),
-                                        features_webgpu: FeaturesWebGPU::DEPTH_CLIP_CONTROL}, // only request what you require (see about OptionalCapabilities - limits and features - here: https://gpuweb.github.io/gpuweb/#feature also https://gpuweb.github.io/gpuweb/#feature-index)
-            required_limits: Limits::downlevel_defaults(),
-            trace: Trace::Off,
-            memory_hints: MemoryHints::Performance,
-            label: Some("wan adapter")
-
-        }; // see here for dev desc debrief: https://gpuweb.github.io/gpuweb/#dictdef-gpudevicedescriptor
-        let adapter_request = graphics_instance.request_adapter(&request_adapter_options);
-        
-        ///  cannot call await in App due to ApplicationHandler constraint
-        /// for this reason I will spawn a task using a tokio runtime, use a user event proxy to get dev and queue into app
-        let prx = self.proxy.take().unwrap();
-        spawn(async move {
-            // now await adapter
-            println!("\x1b[0;33mAwaiting adapter...\n\x1b[0m"); // in Rust, escape code for CSI isn't \033, it's \x1b. reset with [0m in case errors 
-            let adapter_wan = adapter_request.await.expect("\x1b[1;31mCouldn't fetch adapter\x1b[0m\n");
-            println!("\x1b[0;33mAwaiting device...\x1b[0m\n");
-            let dev_req = adapter_wan.request_device(&desc).await.expect("\x1b[1;31mDevice request failed\x1b[0m\n"); // logical *handle* for physical GPU!
-            let _ = prx.send_event(Outcome::ADAPTER(dev_req));
-        });
+            }; // see here for dev desc debrief: https://gpuweb.github.io/gpuweb/#dictdef-gpudevicedescriptor
+            let adapter_request = graphics_instance.request_adapter(&request_adapter_options);
+            
+            //  cannot call await in App due to ApplicationHandler constraint 
+            // for this reason I will spawn a task using a tokio runtime, use a user event proxy to get dev and queue into app
+            let prx = self.proxy.take().unwrap();
+            spawn(async move {
+                // now await adapter
+                println!("\x1b[0;33mAwaiting adapter...\n\x1b[0m"); // in Rust, escape code for CSI isn't \033, it's \x1b. reset with [0m in case errors 
+                let adapter_wan = adapter_request.await.expect("\x1b[1;31mCouldn't fetch adapter\x1b[0m\n");
+                println!("\x1b[0;33mAwaiting device...\x1b[0m\n");
+                let dev_req = adapter_wan.request_device(&desc).await.expect("\x1b[1;31mDevice request failed\x1b[0m\n"); // logical *handle* for physical GPU!
+                let _ = prx.send_event(Outcome::ADAPTER(dev_req));
+            });
+            self.setup = false;
+        } // end of setup
     
         // Device is an open connection to your GPU. Adapter can now die, it's okay :')
         // Dev's gonna be responsible for all the really cool stuff :p
