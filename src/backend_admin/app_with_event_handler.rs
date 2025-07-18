@@ -1,11 +1,11 @@
 use winit::application::ApplicationHandler;
-use winit::event::{StartCause, WindowEvent};
+use winit::event::{WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::window::{Window, WindowId};
 use wgpu::{Instance, InstanceDescriptor};
 use wgpu::{RequestAdapterOptions, PowerPreference, DeviceDescriptor, Device, Queue, Features, FeaturesWGPU, FeaturesWebGPU, Limits, MemoryHints, Trace} ;
 use tokio::{spawn};
-use wgpu::CommandEncoderDescriptor;
+use wgpu::{CommandEncoderDescriptor, RenderPassDescriptor, RenderPassColorAttachment, Operations, LoadOp, StoreOp};
 
 /// Used to match user event proxies in App::user_event
 pub enum Outcome {
@@ -96,7 +96,31 @@ impl ApplicationHandler<Outcome> for App {
                     println!("\x1b[1;32mDevice injected successfully into App!\x1b[0m\n");
                     let comm_enc_desc = CommandEncoderDescriptor::default();
                     if let Some(dev) = &self.device {
+                        // this specifies which swapchain buffer (texture) to render to with target
+                        let col_attach: [Option<RenderPassColorAttachment<'_>>;1] = [Some(RenderPassColorAttachment {
+                            view:,
+                            depth_slice: None, // None for now, but plan to extend to 3D
+                            resolve_target: None,
+                            ops: Operations {
+                                load: LoadOp::Clear(wgpu::Color::GREEN), // loads green buff
+                                store: StoreOp::Store // presents to gpu output
+                            },
+                        }) ];
+
                         let comm_encoder = dev.create_command_encoder(&comm_enc_desc);
+
+                        let render_pass_desc = RenderPassDescriptor {
+                            label: Some("Validate me."),
+                            color_attachments: &col_attach,
+                            depth_stencil_attachment: None,
+                            occlusion_query_set: None,
+                            timestamp_writes: None
+                        };
+                        // begin render pass
+                        /// TODO: configure surface (get inner window size updates through RedrawRequested), getCurrentTexture
+                        /// use that as target in color attachment, begin render pass (with rpdesc),
+                        /// finish rpass, call Queue::Submit, then you must call SurfaceTexture::present
+
                     }
                 }
             }
