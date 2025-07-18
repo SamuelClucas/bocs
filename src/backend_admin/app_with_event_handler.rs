@@ -1,15 +1,16 @@
 use winit::application::ApplicationHandler;
-use winit::event::{WindowEvent};
+use winit::event::{StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::window::{Window, WindowId};
 use wgpu::{Instance, InstanceDescriptor};
 use wgpu::{RequestAdapterOptions, PowerPreference, DeviceDescriptor, Device, Queue, Features, FeaturesWGPU, FeaturesWebGPU, Limits, MemoryHints, Trace} ;
 use tokio::{spawn};
-
+use wgpu::CommandEncoderDescriptor;
 
 /// Used to match user event proxies in App::user_event
 pub enum Outcome {
-    ADAPTER((Device, Queue))
+    ADAPTER((Device, Queue)),
+    DEVICE_READY
 }
 
 /// Setup for logical App struct \n
@@ -24,10 +25,10 @@ pub struct App {
 }
 
 impl  App  {
-    pub fn new (prox: EventLoopProxy<Outcome>) -> App {
+    pub fn new (fun: impl FnOnce()-> EventLoopProxy<Outcome>) -> App {
         App  {
             setup: true,
-            proxy:  Some(prox), // smuggle proxy into app for downstream requests
+            proxy:  Some(fun()), // smuggle proxy into app for downstream requests
             window: None,
             device: None,
             queue: None
@@ -36,13 +37,13 @@ impl  App  {
 }
 /// implements ApplicationHandler for logical App
 impl ApplicationHandler<Outcome> for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if (self.setup) {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) { // ran once on init
+        if self.setup {
             let window_attributes = Window::default_attributes()
                     .with_title("📦")
                     .with_blur(true);
             self.window = Some(event_loop.create_window(window_attributes).expect("\x1b[1;31mError creating window\x1b[0m\n"));
-        // neither of these worked    let inst_descriptor = InstanceDescriptor::from_env_or_default().with_env();
+            // neither of these worked    let inst_descriptor = InstanceDescriptor::from_env_or_default().with_env();
             //let inst_descriptor = InstanceDescriptor::with_env(self);
             let inst_descriptor = InstanceDescriptor { backends: (wgpu::Backends::METAL), ..Default::default()};
             let graphics_instance = Instance::new(&inst_descriptor);
@@ -68,23 +69,18 @@ impl ApplicationHandler<Outcome> for App {
             
             //  cannot call await in App due to ApplicationHandler constraint 
             // for this reason I will spawn a task using a tokio runtime, use a user event proxy to get dev and queue into app
-            let prx = self.proxy.take().unwrap();
+            let prx = self.proxy.clone().take(); // deep copy
             spawn(async move {
                 // now await adapter
                 println!("\x1b[0;33mAwaiting adapter...\n\x1b[0m"); // in Rust, escape code for CSI isn't \033, it's \x1b. reset with [0m in case errors 
                 let adapter_wan = adapter_request.await.expect("\x1b[1;31mCouldn't fetch adapter\x1b[0m\n");
                 println!("\x1b[0;33mAwaiting device...\x1b[0m\n");
                 let dev_req = adapter_wan.request_device(&desc).await.expect("\x1b[1;31mDevice request failed\x1b[0m\n"); // logical *handle* for physical GPU!
-                let _ = prx.send_event(Outcome::ADAPTER(dev_req));
+                let _ = prx.unwrap().send_event(Outcome::ADAPTER(dev_req));
             });
+            // TODO: setup DPI scaling for rendering consistency on different displays
             self.setup = false;
-        } // end of setup
-    
-        // Device is an open connection to your GPU. Adapter can now die, it's okay :')
-        // Dev's gonna be responsible for all the really cool stuff :p
-        // TODO: enclose this backend setup within a conditional, use a bool flag in app to prevent redoing all of it on successive resumptions
-
-
+        } // end of setup: go to App::user_event() :)
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: Outcome) {
@@ -92,7 +88,16 @@ impl ApplicationHandler<Outcome> for App {
                 Outcome::ADAPTER(adapter_wan) => {
                     self.device = Some(adapter_wan.0);
                     self.queue = Some(adapter_wan.1);
-                    println!("\x1b[1;33mDevice and Queue ready! \x1b[0m\n")
+                    println!("\x1b[1;32mDevice and Queue ready! \x1b[0m\n");
+                    let _ = self.proxy.clone().unwrap().send_event(Outcome::DEVICE_READY);
+                }, 
+                Outcome::DEVICE_READY => {
+                    // check device is ready, redundant error catch 
+                    println!("\x1b[1;32mDevice injected successfully into App!\x1b[0m\n");
+                    let comm_enc_desc = CommandEncoderDescriptor::default();
+                    if let Some(dev) = &self.device {
+                        let comm_encoder = dev.create_command_encoder(&comm_enc_desc);
+                    }
                 }
             }
     }

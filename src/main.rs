@@ -20,7 +20,6 @@ async fn main() { // see async
     // ControlFlow::Poll continuously runs the event loop (through Application Handler in App), even if the OS hasn't dispatched any events. 
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    // TODO: make the proxy smuggle into App a little more elegant?
-    let _x = event_loop.run_app(&mut App::new(proxy)); // ! APP ENTRY HERE ! //
+    let _x = event_loop.run_app(&mut App::new(move || proxy)); // ! APP ENTRY HERE ! //
 
 }
