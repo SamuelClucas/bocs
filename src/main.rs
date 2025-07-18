@@ -4,23 +4,23 @@ use winit::{
         EventLoop,
     }, 
 };
+
 mod backend_admin;
-use crate::backend_admin::app_with_event_handler::App;
-// TODO: put comments in docs/? feels messy right now
-/// This spins up the the simulation engine
-/// See winit and wgpu docs for more information
-#[tokio::main] // this is for async! see here: https://rust-lang.github.io/async-book/part-guide/async-await.html
-async fn main() { // see async in backend_admin/app_with_event_handler 
+use crate::backend_admin::app_with_event_handler::{App, Outcome};
+
+/// Entry into app \n
+/// See winit and wgpu docs for more information \n
+#[tokio::main] // this is for async as in backend_admin/app_with_event_handler! see here: https://rust-lang.github.io/async-book/part-guide/async-await.html
+async fn main() { // see async  
     // The EventLoop interfaces with the OS 
     // Tracking WindowEvent and DeviceEvent events...
-    let event_loop = EventLoop::new().unwrap(); // not an active event loop, need proxy for custom window config
+    let event_loop = EventLoop::<Outcome>::with_user_event().build().unwrap(); // not an active event loop
+    let proxy = event_loop.create_proxy(); // used to inject awaited requests back into App
 
-    // ControlFlow::Poll continuously runs the event loop, even if the OS hasn't
-    // dispatched any events. 
+    // ControlFlow::Poll continuously runs the event loop (through Application Handler in App), even if the OS hasn't dispatched any events. 
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    // ... dispatching them through App's implementation
-    // of EventHandler! (see backend_admin/app_and_event_handler.rs
-    let _x = event_loop.run_app(&mut App::default()); // ! APP ENTRY HERE ! //
+    // TODO: make the proxy smuggle into App a little more elegant?
+    let _x = event_loop.run_app(&mut App::new(proxy)); // ! APP ENTRY HERE ! //
 
 }

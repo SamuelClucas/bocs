@@ -1,68 +1,96 @@
-use std::default;
-use tokio::*;
-use wgpu::wgc::present::SurfaceOutput;
 use winit::application::ApplicationHandler;
 use winit::event::{WindowEvent};
-use winit::event_loop::{ActiveEventLoop};
+use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::window::{Window, WindowId};
-use wgpu::{Instance, InstanceDescriptor, RequestAdapterOptionsBase};
-use wgpu::{RequestAdapterOptions, PowerPreference, Surface, DeviceDescriptor, Device, Queue, Features, FeaturesWGPU, FeaturesWebGPU, Limits, MemoryHints, Trace} ;
+use wgpu::{Instance, InstanceDescriptor};
+use wgpu::{RequestAdapterOptions, PowerPreference, DeviceDescriptor, Device, Queue, Features, FeaturesWGPU, FeaturesWebGPU, Limits, MemoryHints, Trace} ;
+use tokio::{spawn};
 
-/// Setup for logical App struct, with logical Window \n
+
+/// Used to match user event proxies in App::user_event
+pub enum Outcome {
+    ADAPTER((Device, Queue))
+}
+
+/// Setup for logical App struct \n
 /// App implements ApplicationHandler for resuming of app, WindowEvent handling \n
-
-// Logical abstraction for the application
 #[derive(Default)]
 pub struct App {
-    window: Option<Window>,
+    proxy: Option<EventLoopProxy<Outcome>>,
+    window: Option<Window>, 
    device: Option<Device>,
     queue: Option<Queue>,
 }
 
+impl  App  {
+    pub fn new (prox: EventLoopProxy<Outcome>) -> App {
+        App  {
+            proxy:  Some(prox), // smuggle proxy into app for downstream requests
+            window: None,
+            device: None,
+            queue: None
+        }
+    }
+}
 /// implements ApplicationHandler for logical App
-impl ApplicationHandler for App {
-    // TODO: traits can't implement async yet, move .await outside resumed()
-    async fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+impl ApplicationHandler<Outcome> for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+
         let window_attributes = Window::default_attributes()
                 .with_title("📦")
                 .with_blur(true);
-        self.window = Some(event_loop.create_window(window_attributes).unwrap());
-
-        let inst_descriptor = InstanceDescriptor::from_env_or_default();
+        self.window = Some(event_loop.create_window(window_attributes).expect("\x1b[1;31mError creating window\x1b[0m\n"));
+    // neither of these worked    let inst_descriptor = InstanceDescriptor::from_env_or_default().with_env();
+        //let inst_descriptor = InstanceDescriptor::with_env(self);
+        let inst_descriptor = InstanceDescriptor { backends: (wgpu::Backends::METAL), ..Default::default()};
         let graphics_instance = Instance::new(&inst_descriptor);
 
-        let surface = graphics_instance.create_surface(self.window.as_ref().unwrap()).ok(); // used to wrap window
-        
+        let surf = graphics_instance.create_surface(self.window.as_ref().unwrap()).expect("\x1b[1;32mError creating surface\x1b[0m\n"); // used to wrap window
         let request_adapter_options = RequestAdapterOptions { // see here for an explanation of each option :) https://gpuweb.github.io/gpuweb/#dictdef-gpurequestadapteroptions
             power_preference: PowerPreference::None,
-            force_fallback_adapter: true,
-            compatible_surface: surface.as_ref()
+            force_fallback_adapter: false,
+            compatible_surface: Some(&surf)
         };
-        let adapter_wan = (graphics_instance.request_adapter(&request_adapter_options)).await.unwrap(); // logical *handle* for physical GPU!
-        
+         
         // device descriptor and request (device, queue)
-        let desc = DeviceDescriptor { // TODO: REWRITE WITH BIT FLAGS THIS SYNTAX IS INCORRECT
-            required_features: Features {features_wgpu: {FeaturesWGPU::POLYGON_MODE_POINT; 
-                                                        FeaturesWGPU::STORAGE_RESOURCE_BINDING_ARRAY; 
-                                                        FeaturesWGPU::BUFFER_BINDING_ARRAY;
-                                                        FeaturesWGPU::MULTI_DRAW_INDIRECT;
-                                                        FeaturesWGPU::PUSH_CONSTANTS;
-                                                        FeaturesWGPU::POLYGON_MODE_LINE},
-                                                        features_webgpu: {FeaturesWebGPU::DEPTH_CLIP_CONTROL}}, // only request what you require (see about OptionalCapabilities - limits and features - here: https://gpuweb.github.io/gpuweb/#feature also https://gpuweb.github.io/gpuweb/#feature-index)
+        let desc = DeviceDescriptor { 
+            required_features: Features {features_wgpu: FeaturesWGPU::empty(),
+                                        features_webgpu: FeaturesWebGPU::DEPTH_CLIP_CONTROL}, // only request what you require (see about OptionalCapabilities - limits and features - here: https://gpuweb.github.io/gpuweb/#feature also https://gpuweb.github.io/gpuweb/#feature-index)
             required_limits: Limits::downlevel_defaults(),
             trace: Trace::Off,
             memory_hints: MemoryHints::Performance,
             label: Some("wan adapter")
 
         }; // see here for dev desc debrief: https://gpuweb.github.io/gpuweb/#dictdef-gpudevicedescriptor
-        let (device, queue) = adapter_wan.request_device(&desc).await.unwrap(); 
-        self.device = Some(device);
-        self.queue = Some(queue);
+        let adapter_request = graphics_instance.request_adapter(&request_adapter_options);
+        
+        ///  cannot call await in App due to ApplicationHandler constraint
+        /// for this reason I will spawn a task using a tokio runtime, use a user event proxy to get dev and queue into app
+        let prx = self.proxy.take().unwrap();
+        spawn(async move {
+            // now await adapter
+            println!("\x1b[0;33mAwaiting adapter...\n\x1b[0m"); // in Rust, escape code for CSI isn't \033, it's \x1b. reset with [0m in case errors 
+            let adapter_wan = adapter_request.await.expect("\x1b[1;31mCouldn't fetch adapter\x1b[0m\n");
+            println!("\x1b[0;33mAwaiting device...\x1b[0m\n");
+            let dev_req = adapter_wan.request_device(&desc).await.expect("\x1b[1;31mDevice request failed\x1b[0m\n"); // logical *handle* for physical GPU!
+            let _ = prx.send_event(Outcome::ADAPTER(dev_req));
+        });
+    
         // Device is an open connection to your GPU. Adapter can now die, it's okay :')
         // Dev's gonna be responsible for all the really cool stuff :p
         // TODO: enclose this backend setup within a conditional, use a bool flag in app to prevent redoing all of it on successive resumptions
 
 
+    }
+
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: Outcome) {
+            match event {
+                Outcome::ADAPTER(adapter_wan) => {
+                    self.device = Some(adapter_wan.0);
+                    self.queue = Some(adapter_wan.1);
+                    println!("\033[1;33mDevice and Queue ready! \033[0m\n")
+                }
+            }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
