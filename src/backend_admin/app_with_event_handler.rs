@@ -92,7 +92,7 @@ impl ApplicationHandler<Outcome> for App {
                 Outcome::ADAPTER(adapter_wan) => {
                     self.device = Some(adapter_wan.0);
                     self.queue = Some(adapter_wan.1);
-                    println!("\033[1;33mDevice and Queue ready! \033[0m\n")
+                    println!("\x1b[1;33mDevice and Queue ready! \x1b[0m\n")
                 }
             }
     }
