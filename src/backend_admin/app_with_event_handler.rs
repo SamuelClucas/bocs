@@ -25,7 +25,7 @@ pub enum Outcome {
 pub struct App {
     setup: bool,
     graphics_instance: Option<Instance>,
-    surface_configuation: Option<SurfaceConfiguration>,
+    surface_configuration: Option<SurfaceConfiguration>,
     proxy: Option<EventLoopProxy<Outcome>>,
     window: Option<Window>,
     scale_factor: Option<f64>,
@@ -38,7 +38,7 @@ impl App  {
         App {
             setup: true,
             graphics_instance: None,
-            surface_configuation: None,
+            surface_configuration: None,
             proxy:  Some(fun()), // smuggle proxy into app using move closure for downstream requests
             window: None,
             scale_factor: None,
@@ -46,11 +46,41 @@ impl App  {
             queue: None
         }
     }
+    /// Updates physical size of self.surface_configuration \n
+    /// Should be called whenever DPI scale factor changes,\n
+    /// Or whenever the window is resized \n
+    pub fn reconfigure_surface(&self) -> Option<Surface> {
+        if let (Some(dev), Some(surf_conf), Some(win), Some(graph_inst)) = (self.device.as_ref(), self.surface_configuration.as_ref(), self.window.as_ref(), self.graphics_instance.as_ref()) {
+            let surface: Surface = self.create_surface().expect("mesg");
+           // .configure(dev, surf_conf));
+            surface.configure(dev, surf_conf);
+            Some(surface)
+        }
+        else {
+            println!("\x1b[1;31mSurface reconfigure failed. Either device, surface configuration, window, or graphics instance is None\x1b[0m\n");
+            None
+        }
+        }
+
+    /// Utility that returns a surface using the instance, window\n
+    /// configuration should be kept up to date at all times, but that is not handled by this function\n
+    /// see App::reconfigure_surface() to keep surface parameters up to date
+    pub fn create_surface(&self) -> Option<Surface> {
+        if let (Some(window), Some(instance)) = (self.window.as_ref(), self.graphics_instance.as_ref()) {
+            Some(instance.create_surface(window).expect("\x1b[1;31mError creating surface\x1b[0m\n"))
+        }
+        else {
+            println!("\x1b[1;31mNo surface could be made, meaning window or instance is None\x1b[0m\n");
+            None
+        }
+    }
 }
+
 /// implements ApplicationHandler for logical App
 impl ApplicationHandler<Outcome> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) { // ran once on init
-        if self.setup {
+        if self.setup == true {
+            self.setup = false;
             // window: logical representation of gpu output, managed by system os
             let window_attributes = Window::default_attributes()
                     .with_title("📦")
@@ -63,9 +93,9 @@ impl ApplicationHandler<Outcome> for App {
             // This line is untested!!
             let inst_descriptor = InstanceDescriptor { backends: (wgpu::Backends::METAL), ..InstanceDescriptor::from_env_or_default()}; 
             self.graphics_instance = Some(Instance::new(&inst_descriptor));
-            let surface = Some(self.graphics_instance.as_ref().unwrap().create_surface(self.window.as_ref().unwrap()).expect("\x1b[1;32mError creating surface\x1b[0m\n")); // used to wrap window
+            
             // TODO: create surface function using instance, window, and surface configuration
-            self.surface_configuation = Some(SurfaceConfiguration {
+            self.surface_configuration = Some(SurfaceConfiguration {
                 width: NonZeroU32::new(window_size.width).unwrap().into(),
                 height: NonZeroU32::new(window_size.height).unwrap().into(),
                 usage: TextureUsages::RENDER_ATTACHMENT, // can be used as render pass output
@@ -75,12 +105,12 @@ impl ApplicationHandler<Outcome> for App {
                 view_formats: vec![wgpu::TextureFormat::Bgra8UnormSrgb;0],
                 alpha_mode: CompositeAlphaMode::Opaque // later change for transparency
             });
+            let surface = self.create_surface(); // used to wrap window
             
-
             let request_adapter_options = RequestAdapterOptions { // see here for an explanation of each option :) https://gpuweb.github.io/gpuweb/#dictdef-gpurequestadapteroptions
                 power_preference: PowerPreference::None,
                 force_fallback_adapter: false,
-                compatible_surface: Some(self.surface.as_ref().unwrap())
+                compatible_surface: surface.as_ref()
             };
             
             // device descriptor and request (device, queue)
@@ -106,8 +136,6 @@ impl ApplicationHandler<Outcome> for App {
                 let dev_req = adapter_wan.request_device(&desc).await.expect("\x1b[1;31mDevice request failed\x1b[0m\n"); // logical *handle* for physical GPU!
                 let _ = prx.unwrap().send_event(Outcome::ADAPTER(dev_req));
             });
-            // TODO: setup DPI scaling for rendering consistency on different displays
-            self.setup = false;
         } // end of setup: go to App::user_event() :)
     }
 
@@ -125,6 +153,8 @@ impl ApplicationHandler<Outcome> for App {
                     let comm_enc_desc = CommandEncoderDescriptor::default();
                     if let Some(dev) = &self.device {
                         // this specifies which swapchain buffer (texture) to render to with target
+                        let surface = self.create_surface().expect("\x1b[1;31mWarning: Failed to create surface in Outcome::DEVICE_READY\x1b[0m\n");
+                        let current_texture = surface.get_current_texture().expect("\x1b[1;31mWarning: Failed to get current texture from surface in Outcome::DEVICE_READY\x1b[0m\n");
                         let col_attach: [Option<RenderPassColorAttachment<'_>>;1] = [Some(RenderPassColorAttachment {
                             view:,
                             depth_slice: None, // None for now, but plan to extend to 3D
@@ -161,16 +191,27 @@ impl ApplicationHandler<Outcome> for App {
                 event_loop.exit();
             },
             WindowEvent::ScaleFactorChanged { .. } => {
-                // Store scale factor for dynamic DPI-aware resizing
-                self.scale_factor = Some(self.window.as_ref().unwrap().scale_factor());
+                // Store scale factor for dynamic DPI-aware resizing for conversion into virtual size (i.e., not physical pixels)
+                self.scale_factor = Some(self.window.as_ref().unwrap().scale_factor()); 
+                if let (Some(config), Some(window)) = (self.surface_configuration.as_mut(), self.window.as_ref()) {
+                    let size = window.inner_size();
+                    let (width, height) = (size.width, size.height);
+                    config.width = (width as f64) as u32; // conversion to logical size
+                    config.height = (height as f64) as u32; 
+                    self.reconfigure_surface();
+                } else {
+                    eprintln!("\x1b[1;31mWarning: Missing scale factor or surface config during resize.\x1b[0m\n");
+                }
+                // call reconfig
             },
             
             WindowEvent::Resized(phys) => {
-                if let (Some(scale), Some(config)) = (self.scale_factor, self.surface_configuation.as_mut()) {
-                    config.width = ((phys.width as f64) * scale) as u32; // conversion to logical size
-                    config.height = ((phys.height as f64) * scale) as u32; 
+                if let Some(config) = self.surface_configuration.as_mut() {
+                    config.width = phys.width; // surface config should always be in physical size, no scale factor use
+                    config.height = phys.height; 
+                    let _ = self.reconfigure_surface();
                 } else {
-                    eprintln!("Warning: Missing scale factor or surface config during resize.");
+                    eprintln!("\x1b[1;31mWarning: Missing scale factor or surface config during resize.\x1b[0m\n");
                 }
             
                 if let Some(window) = self.window.as_ref() {
@@ -192,8 +233,8 @@ impl ApplicationHandler<Outcome> for App {
                 // applications which do not always need to. Applications that redraw continuously
                 // can render here instead.
                 self.window.as_ref().unwrap().request_redraw();
-            }
-            _ => (),
+            },
+            _ => {()},
         }
     }
 }
