@@ -1,10 +1,11 @@
 use std::num::NonZeroU32;
+use wgpu::hal::TextureDescriptor;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
 use winit::event::{WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::window::{Window, WindowId};
-use wgpu::{Instance, InstanceDescriptor};
+use wgpu::{Extent3d, Instance, InstanceDescriptor, TextureFormat, TextureUses};
 use wgpu::{RequestAdapterOptions, PowerPreference, DeviceDescriptor, Device, Queue, Features, FeaturesWGPU, FeaturesWebGPU, Limits, MemoryHints, Trace} ;
 use tokio::{spawn};
 use wgpu::{Surface, CommandEncoderDescriptor, 
@@ -50,7 +51,7 @@ impl App  {
     /// Should be called whenever DPI scale factor changes,\n
     /// Or whenever the window is resized \n
     pub fn reconfigure_surface(&self) -> Option<Surface> {
-        if let (Some(dev), Some(surf_conf), Some(win), Some(graph_inst)) = (self.device.as_ref(), self.surface_configuration.as_ref(), self.window.as_ref(), self.graphics_instance.as_ref()) {
+        if let (Some(dev), Some(surf_conf)) = (self.device.as_ref(), self.surface_configuration.as_ref()) {
             let surface: Surface = self.create_surface().expect("mesg");
            // .configure(dev, surf_conf));
             surface.configure(dev, surf_conf);
@@ -153,10 +154,43 @@ impl ApplicationHandler<Outcome> for App {
                     let comm_enc_desc = CommandEncoderDescriptor::default();
                     if let Some(dev) = &self.device {
                         // this specifies which swapchain buffer (texture) to render to with target
-                        let surface = self.create_surface().expect("\x1b[1;31mWarning: Failed to create surface in Outcome::DEVICE_READY\x1b[0m\n");
+                        let surface = self.reconfigure_surface().expect("\x1b[1;31mFailed to create surface with device in Outcome::DEVICE_READY\x1b[0m\n");
                         let current_texture = surface.get_current_texture().expect("\x1b[1;31mWarning: Failed to get current texture from surface in Outcome::DEVICE_READY\x1b[0m\n");
+                        let text = TextureFormat::Bgra8UnormSrgb;
+                       
+                       let mip_levels = ((self.surface_configuration.as_ref().unwrap().height as f64).max(self.surface_configuration.as_ref().unwrap().height as f64)).log10();
+                        let text_desc = wgpu::TextureDescriptor {
+                            label: Some("This is my texture descriptor"),
+                            size: Extent3d {
+                                width: self.surface_configuration.as_ref().unwrap().width,
+                                height: self.surface_configuration.as_ref().unwrap().height,
+                                depth_or_array_layers: 1
+
+                            },
+                            mip_level_count: mip_levels as u32,
+                            sample_count: 1,
+                            dimension: wgpu::TextureDimension::D2, // this is 2D
+                            format: text,
+                            usage: TextureUsages::RENDER_ATTACHMENT,
+                            view_formats: &[TextureFormat::Bgra8UnormSrgb]
+                        };
+                        let texture = self.device.as_ref().unwrap().create_texture(&text_desc);
+
+                        let view_desc = wgpu::TextureViewDescriptor {
+                            label: Some("This is my texture view"),
+                            format: Some(text), // must be wrapped in `Some`
+                            dimension: Some(wgpu::TextureViewDimension::D2), // Note: use `D2`, not `TextureDimension::D1`
+                            aspect: wgpu::TextureAspect::All,
+                            base_mip_level: 0,
+                            mip_level_count: Some(1), // or Some(mip_levels as u32) if needed
+                            base_array_layer: 0,
+                            array_layer_count: None, // or Some(1) for single layer
+                            usage: Some(TextureUsages::RENDER_ATTACHMENT)
+                        };
+                        let view = texture.create_view(&view_desc);
+
                         let col_attach: [Option<RenderPassColorAttachment<'_>>;1] = [Some(RenderPassColorAttachment {
-                            view:,
+                            view: &view,
                             depth_slice: None, // None for now, but plan to extend to 3D
                             resolve_target: None,
                             ops: Operations {
@@ -165,7 +199,7 @@ impl ApplicationHandler<Outcome> for App {
                             },
                         }) ];
 
-                        let comm_encoder = dev.create_command_encoder(&comm_enc_desc);
+                        let mut comm_encoder = dev.create_command_encoder(&comm_enc_desc);
 
                         let render_pass_desc = RenderPassDescriptor {
                             label: Some("Validate me."),
@@ -174,10 +208,18 @@ impl ApplicationHandler<Outcome> for App {
                             occlusion_query_set: None,
                             timestamp_writes: None
                         };
+
+                        {
+                        let render_pass = comm_encoder.begin_render_pass(&render_pass_desc);
+                        }
+                        let command_buff = comm_encoder.finish();
+                        self.queue.as_ref().unwrap().submit(vec![command_buff]);
+                        current_texture.present();
+
                         // begin render pass
-                        /// TODO: configure surface (get inner window size updates through RedrawRequested), getCurrentTexture
-                        /// use that as target in color attachment, begin render pass (with rpdesc),
-                        /// finish rpass, call Queue::Submit, then you must call SurfaceTexture::present
+                        // TODO: configure surface (get inner window size updates through RedrawRequested), getCurrentTexture
+                        // use that as target in color attachment, begin render pass (with rpdesc),
+                        // finish rpass, call Queue::Submit, then you must call SurfaceTexture::present
 
                     }
                 }
@@ -214,9 +256,9 @@ impl ApplicationHandler<Outcome> for App {
                     eprintln!("\x1b[1;31mWarning: Missing scale factor or surface config during resize.\x1b[0m\n");
                 }
             
-                if let Some(window) = self.window.as_ref() {
-                    window.request_redraw();
-                }
+               // if let Some(window) = self.window.as_ref() {
+               //     window.request_redraw();
+               // }
             },
             WindowEvent::RedrawRequested => {
                 // Redraw the application.
