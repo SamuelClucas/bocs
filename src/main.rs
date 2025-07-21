@@ -4,9 +4,9 @@ use winit::{
         EventLoop,
     }, 
 };
-
 mod backend_admin;
-use crate::backend_admin::app_with_event_handler::{App, Outcome};
+use crate::backend_admin::{state::State, app_with_event_handler::App} ;
+
 
 /// Entry into app \n
 /// See winit and wgpu docs for more information \n
@@ -14,7 +14,7 @@ use crate::backend_admin::app_with_event_handler::{App, Outcome};
 async fn main() { // see async  
     // The EventLoop interfaces with the OS 
     // Tracking WindowEvent and DeviceEvent events...
-    let event_loop = EventLoop::<Outcome>::with_user_event().build().unwrap(); // not an active event loop
+    let event_loop = EventLoop::<State>::with_user_event().build().unwrap(); // not an active event loop
     let proxy = event_loop.create_proxy(); // used to inject awaited requests back into App
 
     // ControlFlow::Poll continuously runs the event loop (through Application Handler in App), even if the OS hasn't dispatched any events. 
