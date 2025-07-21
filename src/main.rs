@@ -5,7 +5,7 @@ use winit::{
     }, 
 };
 mod backend_admin;
-use crate::backend_admin::{state::State, app_with_event_handler::App} ;
+use crate::backend_admin::{state::State, app_dispatcher::App} ;
 
 
 /// Entry into app \n

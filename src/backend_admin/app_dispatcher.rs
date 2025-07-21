@@ -1,22 +1,10 @@
-use std::num::NonZeroU32;
 use winit::application::ApplicationHandler;
-use winit::event::{self, WindowEvent};
+use winit::event::{WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
-use winit::window::{Window, WindowId};
-use wgpu::{Extent3d, Instance, InstanceDescriptor, TextureFormat};
-use wgpu::{RequestAdapterOptions, PowerPreference, DeviceDescriptor, Device, Queue, Features, FeaturesWGPU, FeaturesWebGPU, Limits, MemoryHints, Trace} ;
-use tokio::{spawn};
-use wgpu::{Surface, CommandEncoderDescriptor, 
-    RenderPassDescriptor, 
-    RenderPassColorAttachment, 
-    Operations, LoadOp, StoreOp,
-    SurfaceConfiguration,TextureUsages, CompositeAlphaMode};
+use winit::window::{Window};
 use std::sync::Arc;
-use anyhow::{Result, Context};
-use env_logger;
 
 use crate::backend_admin::state::State;
-
 
 /// Setup for logical App struct \n
 /// App implements ApplicationHandler for resuming of app, WindowEvent handling \n
@@ -38,19 +26,18 @@ impl App  {
 /// implements ApplicationHandler for logical App
 impl ApplicationHandler<State> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) { // ran once on init
-        env_logger::init();
-            // window: logical representation of gpu output, managed by system os
-            let window_attributes = Window::default_attributes()
-                    .with_title("📦")
-                    .with_blur(true);
-            let window = Arc::new(event_loop.create_window(window_attributes).expect("\x1b[1;31mError creating window\x1b[0m\n"));
-      
-            // Need async context for requests
-            // hence using tokio::spawn task, use a user event proxy to inject awaits back into app
-            if let Some(prx) = self.proxy.take() {
-                let state = pollster::block_on(State::new(window.clone())).expect("Couldn't get state");
-                self.user_event(&event_loop,state);
-            } // end of setup: go to App::user_event() :)
+        // window: logical representation of gpu output, managed by system os
+        let window_attributes = Window::default_attributes()
+                .with_title("📦")
+                .with_blur(true);
+        let window = Arc::new(event_loop.create_window(window_attributes).expect("\x1b[1;31mError creating window\x1b[0m\n"));
+    
+        // Need async context for requests
+        // hence using tokio::spawn task, use a user event proxy to inject awaits back into app
+        if let Some(prx) = self.proxy.take() {
+            let state = pollster::block_on(State::new(window.clone())).expect("Couldn't get state");
+            self.user_event(&event_loop,state);
+        } // end of setup: go to App::user_event() :)
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, mut event: State) {
