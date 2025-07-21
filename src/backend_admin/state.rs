@@ -105,7 +105,7 @@ impl State {
         let output = self.surface.get_current_texture()?;
         // this defines how the texture is interpreted (sampled) to produce the actual pixel outputs to the surface
         // texel -> pixel
-        let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default()); 
+        let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default()); // both associated with surface
 
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Command Encoder")

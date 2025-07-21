@@ -65,6 +65,9 @@ impl ApplicationHandler<State> for App {
                 ..} => {
                     state.handle_key(&event_loop, code, key_state.is_pressed()) // self.state, not KeyEvent::state
             },
+            WindowEvent::CloseRequested => {
+                event_loop.exit();
+            },
             WindowEvent::ScaleFactorChanged { .. } => {
                 // Store scale factor for dynamic DPI-aware resizing for conversion into virtual size (i.e., not physical pixels)
                 state.scale_factor = Some(state.window.as_ref().scale_factor()); 
