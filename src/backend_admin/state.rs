@@ -10,7 +10,8 @@ pub struct State {
     is_surface_configured: bool,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    pub scale_factor: Option<f64>
+    pub scale_factor: Option<f64>,
+    pipeline: wgpu::RenderPipeline
 
 }
 
@@ -35,11 +36,21 @@ impl State {
 
         let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor{
             label: None,
-            required_features: wgpu::Features::empty(),
+            required_features: wgpu::Features::POLYGON_MODE_LINE,
             required_limits: wgpu::Limits::defaults(),
             trace: wgpu::Trace::Off,
             memory_hints: Default::default(),
         }).await?;
+
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../shader.wgsl").into())
+        });
+        let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("RenderPipelineLayout"),
+            bind_group_layouts: &[],
+            push_constant_ranges: &[]
+        });
 
         let surface_caps = surface.get_capabilities(&adapter);
 
@@ -58,6 +69,46 @@ impl State {
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor { 
+            label: Some("MeowPipeline"), 
+            layout: Some(&render_pipeline_layout), 
+            vertex: wgpu::VertexState{
+                module: &shader,
+                entry_point: Some("vs_main"), 
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[]
+            }, 
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList, 
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw, 
+                cull_mode: Some(wgpu::Face::Back),
+                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                polygon_mode: wgpu::PolygonMode::Line,
+                // Requires Features::DEPTH_CLIP_CONTROL
+                unclipped_depth: false,
+                // Requires Features::CONSERVATIVE_RASTERIZATION
+                conservative: false,
+            },
+            depth_stencil: None, 
+            multisample: wgpu::MultisampleState {
+                    count: 1, 
+                    mask: !0, 
+                    alpha_to_coverage_enabled: false, 
+                }, 
+            fragment: Some(wgpu::FragmentState { // needed to store colour data to the surface
+               module: &shader,
+               entry_point: Some("fs_main"),
+               compilation_options: wgpu::PipelineCompilationOptions::default(),
+               targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format, // format of surface
+                    blend: Some(wgpu::BlendState::REPLACE), // replace old colour with new colour
+                    write_mask: wgpu::ColorWrites::ALL // write to all channels
+               })]
+            }), 
+            multiview: None, 
+            cache: None, 
+        });
 
         let scale_factor = Some(window.as_ref().scale_factor()); 
 
@@ -70,6 +121,7 @@ impl State {
                 queue,
                 surface,
                 scale_factor,
+                pipeline: render_pipeline,
                 surf_config: config,
                 is_surface_configured: false,
             }
@@ -98,7 +150,7 @@ impl State {
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         self.window.request_redraw();
 
-        if!self.is_surface_configured {
+        if! self.is_surface_configured {
             self.surface.configure(&self.device, &self.surf_config);
         } 
         // this owns the texture, wrapping it with some extra swapchain-related info
@@ -111,16 +163,16 @@ impl State {
             label: Some("Command Encoder")
         });
         {
-            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { // mutable borrow of encoder here
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { // mutable borrow of encoder here
                 label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment { // framebuffer
                     depth_slice: None,
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
+                            r: 0.3,
+                            g: 0.3,
                             b: 0.3,
                             a: 1.0,
                         }),
@@ -131,6 +183,9 @@ impl State {
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
+
+            render_pass.set_pipeline(&self.pipeline);
+            render_pass.draw(0..3, 0..1);
         } // encoder borrow dropped here
     
         // submit will accept anything that implements IntoIter
