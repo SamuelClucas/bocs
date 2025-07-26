@@ -1,27 +1,27 @@
 // Vertex shader attempt
+struct VertexInput {
+    @location(0) position: vec3<f32>,
+    @location(1) colour: vec3<f32>
+};
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) vert_pos: vec3<f32>
+    @location(0) colour: vec3<f32>
 };
 
 @vertex
 fn vs_main(
-    @builtin(vertex_index) at_vertex_index: u32 // each vertex exists at an index
+    model: VertexInput,
 ) -> VertexOutput {
     var out: VertexOutput;
-    let x = f32(1 - i32(at_vertex_index)) * 0.5;
-    let y = f32(i32(at_vertex_index & 1u) * 2 - 1) * 0.5;
-    out.clip_position = vec4<f32>(x, y, 0.0, 1.0);
-    out.vert_pos = out.clip_position.xyz;
+    out.colour = model.colour;
+    out.clip_position = vec4<f32>(model.position, 1.0);
     return out;
 }
 
-// Fragment shader attempt
+// Fragment shader
 
 @fragment
-fn fs_main(
-    in: VertexOutput
- ) -> @location(0) vec4<f32> { // render this colour at first colour target
-    return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    return vec4<f32>(in.colour, 1.0);
 }

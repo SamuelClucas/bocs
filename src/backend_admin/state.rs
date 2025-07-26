@@ -1,7 +1,50 @@
 use winit::window::Window;
 use std::sync::Arc;
 use anyhow::{Result, Context};
+use wgpu::util::DeviceExt;
 
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Vertex {
+    pos: [f32; 3],
+    colour: [f32; 3]
+}
+
+impl Vertex {
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                }
+            ]
+        }
+    }
+}
+
+const VERTICES: &[Vertex] = &[
+    Vertex { pos: [-0.0868241, 0.49240386, 0.0], colour: [0.5, 0.0, 0.5] }, // A
+    Vertex { pos: [-0.49513406, 0.06958647, 0.0], colour: [0.5, 0.0, 0.5] }, // B
+    Vertex { pos: [-0.21918549, -0.44939706, 0.0], colour: [0.5, 0.0, 0.5] }, // C
+    Vertex { pos: [0.35966998, -0.3473291, 0.0], colour: [0.5, 0.0, 0.5] }, // D
+    Vertex { pos: [0.44147372, 0.2347359, 0.0], colour: [0.5, 0.0, 0.5] }, // E
+];
+
+const INDICES: &[u16] = &[
+    0, 1, 4,
+    1, 2, 4,
+    2, 3, 4,
+];
 
 pub struct State {
     pub window: Arc<Window>,
@@ -11,12 +54,18 @@ pub struct State {
     device: wgpu::Device,
     queue: wgpu::Queue,
     pub scale_factor: Option<f64>,
-    pipeline: wgpu::RenderPipeline
+    pipeline: wgpu::RenderPipeline,
+    vertex_buffer: wgpu::Buffer,
+    num_vertices: u32,
+    index_buffer: wgpu::Buffer,
+    num_indices: u32
 
 }
 
 impl State {
     pub async fn new(window: Arc<Window>) -> Result<Self> {
+        let num_vertices = VERTICES.len() as u32;
+        let num_indices = INDICES.len() as u32;
         let size = window.inner_size();
 
         // Instance == handle to GPU
@@ -42,12 +91,29 @@ impl State {
             memory_hints: Default::default(),
         }).await?;
 
+        let vertex_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(VERTICES), // convert to &[u8]
+                usage: wgpu::BufferUsages::VERTEX,
+            }
+        );
+
+        let index_buffer: wgpu::Buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor{
+                label: Some("Index Buffer"),
+                contents: bytemuck::cast_slice(INDICES),
+                usage: wgpu::BufferUsages::INDEX
+            }
+        );
+
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("../shader.wgsl").into())
         });
+
         let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("RenderPipelineLayout"),
+            label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[],
             push_constant_ranges: &[]
         });
@@ -69,6 +135,7 @@ impl State {
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
+
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor { 
             label: Some("MeowPipeline"), 
             layout: Some(&render_pipeline_layout), 
@@ -76,7 +143,7 @@ impl State {
                 module: &shader,
                 entry_point: Some("vs_main"), 
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[]
+                buffers: &[Vertex::desc()]
             }, 
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList, 
@@ -121,9 +188,13 @@ impl State {
                 queue,
                 surface,
                 scale_factor,
+                num_vertices,
+                num_indices,
+                index_buffer,
                 pipeline: render_pipeline,
                 surf_config: config,
                 is_surface_configured: false,
+                vertex_buffer: vertex_buffer
             }
         )
     }
@@ -171,9 +242,9 @@ impl State {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.3,
-                            g: 0.3,
-                            b: 0.3,
+                            r: 0.75,
+                            g: 0.75,
+                            b: 0.75,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
@@ -185,7 +256,9 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.num_indices,0, 0..1);
         } // encoder borrow dropped here
     
         // submit will accept anything that implements IntoIter
