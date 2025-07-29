@@ -1,34 +1,83 @@
-# 📦 bocs
-<img width="400" height="400" alt="logo" src="https://github.com/user-attachments/assets/468adec1-f8df-4930-afe5-edf96dc418ce" /><br />
-## A 3D scientific simulation engine... built with Rust! 
-  
-### Vision:
-With the advent of deep machine learning techniques giving rise to tools like [AlphaFold](https://alphafold.ebi.ac.uk/), challenges that once seemed impossible - like de novo protein design - now enter into feasibility. It's only natural to imagine what else might be possible.  
-  
-I am greatly excited by the idea of synthetic cell design. Imagine a cell whose genome contains 'modules' that confer particular functionalities or cell behaviours. There are also great implications for the design of new, organic materials, with unique properties that arise from biological mechanisms. One such idea I had was a salt cell: one that uses an Electron Transport Chain/Resting potential hybrid mechanism (as in a chloroplast's thylakoid, and a neuronal cell) to use saltwater to store chemical energy.  
-  
-There's a whole lot of science that needs to happen to realise cool things like this — I also understand that wetlab experimentation is expensive, fiddly, and time-consuming...  
-  
-I ask myself this: how can I contribute?  
-  
-### My Skills:  
-- programming and project documentation
-- grasp of fundamental mathematics
-- awareness of physics and chemistry
-- BSc 1:1 in biological sciences from Durham University
+**# 📦 bocs: A 3D Mesoscopic Cell Simulation Engine in Rust**
 
-### My Interests:  
-I am fascinated by the 'what?' and 'how?' of things. More importantly, I won't stop chasing the answers - an attempt at control amidst the unrelenting chaos of the universe.  
-  
-I believe I am uniquely positioned to design an _in-silico_ cell simulation platform - wetlab isn't my strongest asset...  
-In particular, **I am interested in modelling membrane physics at the mesoscopic scale**, prioritising both **performance** and **realism**. To do so, I am switching from my beloved C++ to Rust. The language enforces solid program design, is memory-safe, and also incredibly performant.  
+## What is bocs?
 
-> [!CAUTION]
-> This is going to be a real challenge.  
+***bocs*** is a low-level 3D simulation engine for modelling biological systems at the mesoscopic scale — with a specific focus on **membrane physics and lipid self-assembly**. Built entirely in **Rust**, it aims to balance **scientific realism**, **performance**, and **transparency** by avoiding game engines and prebuilt abstractions.
 
-I do not want to use a high-level graphical library or game-engine, like [`bevy`](https://bevy.org/learn/book/getting-started/), for example. I want to fully own my code, which empowers me as a researcher in a few ways:  
-1. I intimately understand the tool because I built it
-2. Because of the above, I understand its limitations
+I'm building a tool for exploring emergent behaviour in soft matter systems.
+
+---
+
+## Current Status
+
+This is an early-stage, work-in-progress project. I'm building everything from scratch — the rendering pipeline, the simulation logic, and the core data structures — which means progress is steady but intentional.
+
+Expect:
+
+* A custom GPU-accelerated rendering pipeline
+* Voxel-based scalar field representation of lipid concentration
+* Physically grounded camera orbit system and frustum-based ray generation
+* Ray marching renderer with per-frame scalar updates
+* Focus on approximating real cell membrane behaviour (e.g. vesicle nucleation, protein-coupled membrane deformation)
+
+---
+
+## Why?
+
+The field of computational biology is undergoing a revolution. With breakthroughs like [AlphaFold](https://alphafold.ebi.ac.uk/) showing the power of machine learning in structural prediction, the horizon has shifted. What else might we simulate? Can we push into domains where wet-lab work is expensive or inaccessible?
+
+**I believe the answer is yes.**
+
+I'm particularly interested in questions like:
+
+* How does membrane curvature arise from local lipid composition or protein activity?
+* What kinds of cell-like behaviours can emerge from purely physical rules?
+* How can we develop a fully integrated cellular model — from genome to phenotype — that exhibits real, *in-vivo* behaviour?
+* Can such a model be used in conjunction with wet-lab experimentation to accelerate research?
+
+Ultimately, I'd love to explore the design of **synthetic cells** through *in-silico* modelling. I learn best by studying theory and validating through programmatic implementation, so I am developing my own simulation engine.
+
+---
+
+## My Background
+
+* BSc (First Class) in Biological Sciences, Durham University
+* Fluent in low-level systems programming (C++, Rust), with a focus on performance optimisation
+* Familiar with mathematical and physical modelling
+* An inter-disciplinary fascination with biology, mathematics, computer science, and physics
+
+This project blends biophysics and computation. I want to see how far I can push *in-silico* cellular modelling using compute shaders and optimisation techniques.
+
+---
+
+## Guiding Principles
+
+* **Learn by doing**: No black boxes. I avoid engines like Bevy so I can own every layer of the stack.
+* **Performance**: Rust gives me memory safety without sacrificing speed. I use `wgpu` directly for graphics.
+* **Fidelity**: Design choices are guided by the physics of lipid behaviour, diffusion, and self-assembly.
+
+---
+
+## Why the name "bocs"?
+
+It means "box" in Welsh — a nod to voxel grids, cellular compartments, and the 3D simulation space I'm building. It conveniently stands for:
+
+> **B**iological
+>
+> **O**bjects
+>
+>     in
+>
+> **C**omputational
+>
+> **S**pace
+
+---
+
+## Get Involved
+
+I'm always open to feedback, collaboration, or discussion with other simulation-minded biologists, programmers, or designers. Please reach out!
+
 3. In Digi-Lab, I am god. I can continue to develop its features, hopefully converging on something special...
   
 For these reasons, I am writing the simulation engine in [`wgpu`](https://docs.rs/wgpu/latest/wgpu/), Rust's flagship graphics library. Its documentation is robust, as is its code, from which I hope to learn and become a better systems architect. I plan to take advantage of parallel computation (GPU-acceleration) wherever practical to expand the engine's capabilities as much as possible.  
