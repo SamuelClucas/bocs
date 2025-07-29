@@ -84,12 +84,12 @@ impl State {
             mapped_at_creation: false // see shader for init
         });
 
-
+/* 
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                 label: Some("Laplacian"),
                 layout: Some(&wgpu::PipelineLayout{})
         });
-
+        */
 
         // --- //
 
