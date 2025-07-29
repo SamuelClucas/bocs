@@ -1,4 +1,4 @@
-### Firstly, what the f\*ck is a context?
+### Firstly, what is a context?
 When a program runs, it's better described as a process—an active entity that uses the CPU (and any other system component it needs) to perform computations. It's not a to happen or a happened—it's a happening.
 
 An operating system must manage process access to a CPU, lest the process orchestra turn into the process rave. 

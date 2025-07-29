@@ -18,7 +18,7 @@ I've written notes that feel approachable, explicit, and precise. Please read th
 
 ### Contents:
 1. [Winit](https://docs.rs/winit/latest/winit/index.html)  
-    ...[WTF Is a Context?](./winit/WTF%20Is%20a%20Context.md)  
+    ...[What Is a Context?](./winit/WTF%20Is%20a%20Context.md)  
     ...[Threads](./winit/Threads.md)  
     ...[Time to Win-it](./winit/Time%20to%20Win-it.md)  
 2. [wgpu Setup](https://docs.rs/wgpu/latest/wgpu/index.html)  
