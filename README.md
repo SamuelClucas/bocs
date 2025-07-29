@@ -7,9 +7,9 @@
 
 I'm building a tool for exploring emergent behaviour in soft matter systems.
 
-## Current Status
-
-This is an early-stage, work-in-progress project. I'm building everything from scratch — the rendering pipeline, the simulation logic, and the core data structures — which means progress is steady but intentional.
+## Current Status: See plan updates [here](./docs/Current%20Plan.md)  
+> [!NOTE]
+> This is an early-stage, work-in-progress project. I'm building everything from scratch — the rendering pipeline, the simulation logic, and the core data structures — which means progress is steady but intentional.
 
 Expect:
 
