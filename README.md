@@ -1,4 +1,5 @@
-**# 📦 bocs: A 3D Mesoscopic Cell Simulation Engine in Rust**
+# 📦 bocs: ** <br/>
+A 3D Mesoscopic Cell Simulation Engine in Rust
 
 ## What is bocs?
 
