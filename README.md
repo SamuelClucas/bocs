@@ -1,5 +1,5 @@
 # 📦 bocs: 
-<img src="./assets/bocs.gif" alt="bocs simulation demo" width="300">
+<img src="./assets/bocs_loop.gif" alt="bocs simulation demo" width="300">
 
 ## A 3D Mesoscopic Cell Simulation Engine in Rust
 
