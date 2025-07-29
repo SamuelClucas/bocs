@@ -18,7 +18,6 @@ Expect:
 * Ray marching renderer with per-frame scalar updates
 * Focus on approximating real cell membrane behaviour (e.g. vesicle nucleation, protein-coupled membrane deformation)
 
----
 
 ## Why?
 
@@ -35,7 +34,6 @@ I'm particularly interested in questions like:
 
 Ultimately, I'd love to explore the design of **synthetic cells** through *in-silico* modelling. I learn best by studying theory and validating through programmatic implementation, so I am developing my own simulation engine.
 
----
 
 ## My Background
 
@@ -46,7 +44,6 @@ Ultimately, I'd love to explore the design of **synthetic cells** through *in-s
 
 This project blends biophysics and computation. I want to see how far I can push *in-silico* cellular modelling using compute shaders and optimisation techniques.
 
----
 
 ## Guiding Principles
 
@@ -54,7 +51,6 @@ This project blends biophysics and computation. I want to see how far I can push
 * **Performance**: Rust gives me memory safety without sacrificing speed. I use `wgpu` directly for graphics.
 * **Fidelity**: Design choices are guided by the physics of lipid behaviour, diffusion, and self-assembly.
 
----
 
 ## Why the name "bocs"?
 
@@ -70,12 +66,7 @@ It means "box" in Welsh — a nod to voxel grids, cellular compartments, and the
 >
 > **S**pace
 
----
 
 ## Get Involved
 
 I'm always open to feedback, collaboration, or discussion with other simulation-minded biologists, programmers, or designers. Please reach out!
-
-3. In Digi-Lab, I am god. I can continue to develop its features, hopefully converging on something special...
-  
-For these reasons, I am writing the simulation engine in [`wgpu`](https://docs.rs/wgpu/latest/wgpu/), Rust's flagship graphics library. Its documentation is robust, as is its code, from which I hope to learn and become a better systems architect. I plan to take advantage of parallel computation (GPU-acceleration) wherever practical to expand the engine's capabilities as much as possible.  
