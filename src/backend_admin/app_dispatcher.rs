@@ -94,7 +94,9 @@ impl ApplicationHandler<State> for App {
                                 x: position.x - mouse_down.x,
                                 y: position.y - mouse_down.y
                             };
-                            state.handle_cursor_move(delta);
+                            // handle cursor move here
+                            state.camera.update(delta.x as f32, delta.y as f32);
+                            state.mouse_down = Some(position);
                         }
                         else {
                             state.mouse_down = Some(position);

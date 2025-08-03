@@ -1,5 +1,7 @@
-use winit::window::Window;
+use winit::{dpi::PhysicalPosition, window::Window};
 use std::sync::Arc;
+use crate::world::camera::{self, OrbitalCamera};
+use cgmath::Vector2;
 use anyhow::{Result, Context};
 use wgpu::{util::DeviceExt, BufferUsages};
 
@@ -7,6 +9,8 @@ use wgpu::{util::DeviceExt, BufferUsages};
 
 
 pub struct State {
+    pub mouse_is_pressed: bool,
+    pub mouse_down: Option<PhysicalPosition<f64>>,
     pub window: Arc<Window>,
     surface: wgpu::Surface<'static>,
     surf_config: wgpu::SurfaceConfiguration,
@@ -14,6 +18,7 @@ pub struct State {
     device: wgpu::Device,
     queue: wgpu::Queue,
     pub scale_factor: Option<f64>,
+    pub camera: OrbitalCamera
    // pipeline: wgpu::RenderPipeline,
 
 
@@ -21,6 +26,8 @@ pub struct State {
 
 impl State {
     pub async fn new(window: Arc<Window>) -> Result<Self> {
+        let camera = OrbitalCamera::new(200.0, 0.0, 0.0);
+
         let size = window.inner_size();
 
         // Instance == handle to GPU
@@ -144,6 +151,7 @@ impl State {
 
         Ok (
             Self { 
+                mouse_is_pressed: false,
                 window, 
                 device,
                 queue,
@@ -152,6 +160,8 @@ impl State {
               //  pipeline: render_pipeline,
                 surf_config: config,
                 is_surface_configured: false,
+                mouse_down: None,
+                camera: camera
 
             }
         )
