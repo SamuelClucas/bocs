@@ -1,6 +1,6 @@
 use winit::application::ApplicationHandler;
-use winit::dpi::{LogicalSize, PhysicalSize};
-use winit::event::{InnerSizeWriter, WindowEvent};
+use winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
+use winit::event::{ElementState, InnerSizeWriter, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::window::{Fullscreen, Window};
 use std::sync::Arc;
@@ -72,6 +72,37 @@ impl ApplicationHandler<State> for App {
         };
 
         match event {
+            WindowEvent::MouseInput { device_id, state, button } => {
+                match state {
+                    ElementState::Pressed => {
+                        self.state.as_mut().unwrap().mouse_is_pressed = true;
+                    },
+                    ElementState::Released => {
+                        if let Some(state) = self.state.as_mut(){
+                            state.mouse_is_pressed = false;
+                            state.mouse_down = None;
+                        }
+                        else {println!("No state at mouse input\n");}
+                    }
+                }
+            },
+            WindowEvent::CursorMoved { device_id, position } => {
+                if let Some(state) = self.state.as_mut(){
+                    if state.mouse_is_pressed == true {
+                        if let Some(mouse_down) = state.mouse_down{
+                            let delta = PhysicalPosition {
+                                x: position.x - mouse_down.x,
+                                y: position.y - mouse_down.y
+                            };
+                            state.handle_cursor_move(delta);
+                        }
+                        else {
+                            state.mouse_down = Some(position);
+                        }
+                    }
+                }
+                else {println!("No state at cursor moved\n");}
+            },
             WindowEvent::KeyboardInput {
                 event: winit::event::KeyEvent {
                         physical_key: winit::keyboard::PhysicalKey::Code(code),
