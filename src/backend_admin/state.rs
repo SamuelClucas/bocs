@@ -1,6 +1,6 @@
 use winit::{dpi::PhysicalPosition, window::Window};
 use std::sync::Arc;
-use crate::world::camera::{self, OrbitalCamera};
+use crate::world::camera::OrbitalCamera;
 use cgmath::Vector2;
 use anyhow::{Result, Context};
 use wgpu::{util::DeviceExt, BufferUsages};
