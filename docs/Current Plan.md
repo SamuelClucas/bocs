@@ -1,10 +1,10 @@
 ### **The Plan**  
 
-#### **Stage 1: Build Mathematical Foundations**  
+#### **Stage 1: Build Mathematical Foundations**  ✔️
 
-- **Understand the 3D determinant** geometrically and algebraically  
-- Use that to **intuitively derive the cross product**, so it’s not just a rule but a spatial operation I trust  
-- Apply the cross product to build a **view matrix**: use `right = cross(up, forward)` and so on to derive camera orientation → this unlocks orbiting cameras  
+- **Understand the 3D determinant** geometrically and algebraically  ✔️
+- Use that to **intuitively derive the cross product**, so it’s not just a rule but a spatial operation I trust  ✔️
+- Apply the cross product to build a **view matrix**: use `right = cross(up, forward)` and so on to derive camera orientation → this unlocks orbiting cameras   ✔️
     
 ---
 
