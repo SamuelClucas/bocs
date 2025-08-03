@@ -6,9 +6,7 @@ pub struct OrbitalCamera {
     c: Vector3<f32>, // where c is camera pos in world space, 
     f: Vector3<f32>, // where f is unit vector from c to world space origin, orthogonal to u and r (u X r)
     u: Vector3<f32>, // where u is unit vector up from c, orthogonal to f and r (f x r)
-    r: Vector3<f32>, // where r is unit vector right from c, orthogonal to f and u (f X u)
-    
-    
+    r: Vector3<f32>, // where r is unit vector right from c, orthogonal to f and u (f X u)  
 }
 
 impl OrbitalCamera {   
@@ -28,6 +26,31 @@ impl OrbitalCamera {
     pub fn magnitude(input: &Vector3<f32>) -> f32 {
         let square = Self::dot(input, input);
         square.sqrt()
+    }
+    // this is moving to the compute shader
+    pub fn world_to_ruf_coeffcients(&self, input: Vector3<f32>) -> Vector3<f32> { // right is x, up is y, forward is z
+        Vector3::new(
+                Self::dot(&input, &self.r), // right
+                Self::dot(&input, &self.u), // up
+                Self::dot(&input, &self.f) // forward
+        )
+    }
+
+    // recompute ruf basis vectors on camera movement
+    pub fn update(&mut self, di: f32, dj: f32, dk: f32) {
+        self.c.x += di;
+        self.c.y += dj;
+        self.c.z += dk;
+        let mag = Self::magnitude(&self.c);
+
+        self.f = -self.c/mag; // new forward direction, normalised
+        let up = Vector3::new(self.c.x, self.c.y + 1.0, self.c.z);
+
+        self.r = Self::cross(&up, &self.f);
+        self.r = self.r/Self::magnitude(&self.r); // new right, normalised
+
+        self.u = Self::cross(&self.f, &self.r);
+        self.u = self.u/Self::magnitude(&self.u); // new up, normalised
     }
 
     pub fn new(window_size: PhysicalSize<u32>, i: f32, j: f32, k: f32) -> Self {
