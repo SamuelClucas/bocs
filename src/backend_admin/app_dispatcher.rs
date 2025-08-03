@@ -105,6 +105,7 @@ impl ApplicationHandler<State> for App {
                 }
                 else {println!("No state at cursor moved\n");}
             },
+            // TODO: add zoom gesture, scale magnitude of camera pos 
             WindowEvent::KeyboardInput {
                 event: winit::event::KeyEvent {
                         physical_key: winit::keyboard::PhysicalKey::Code(code),
