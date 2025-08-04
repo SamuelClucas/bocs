@@ -1,4 +1,4 @@
-use cgmath::{Vector2, Vector3, Vector4};
+use cgmath::{InnerSpace, Vector2, Vector3, Vector4};
 use winit::dpi::PhysicalSize;
 
 
@@ -7,6 +7,7 @@ pub struct OrbitalCamera {
     f: Vector3<f32>, // where f is unit vector from c to world space origin, orthogonal to u and r (u X r)
     u: Vector3<f32>, // where u is unit vector up from c, orthogonal to f and r (f x r)
     r: Vector3<f32>, // where r is unit vector right from c, orthogonal to f and u (f X u)  
+    scroll_coeff: f32
 }
 
 impl OrbitalCamera {   
@@ -38,20 +39,31 @@ impl OrbitalCamera {
 
     /// recompute ruf basis vectors on camera movement
     /// TODO: implement angle-based mapping of dx and dy into world deltas
-    pub fn update(&mut self, dx: f32, dy: f32) {
-        let multiplier_to_surface = Self::magnitude(&self.c);
+    pub fn update(&mut self, dx: Option<f32>, dy: Option<f32>, dscroll: Option<f32>) {
+        let multiplier_to_surface = if let Some(d_scroll) = dscroll{
+            self.c /= Self::magnitude(&self.c); // normalise
+            Self::magnitude(&self.c) * -d_scroll * self.scroll_coeff // get new mag
+        }
+        else { Self::magnitude(&self.c)};
+        self.c *= multiplier_to_surface; // new scaled vector
 
         // distribute over components, normalise and scale back to surface
-        self.c.x -= dx;
-        self.c.y -= dy;
-        self.c.z += dx;
-        let new_mag = Self::magnitude(&self.c);
-        self.c /= new_mag;
-        self.c *= multiplier_to_surface;
+        let new_mag = if let (Some(dx), Some(dy)) = (dx, dy) {
+            self.c.x -= dx;
+            self.c.y -= dy;
+            self.c.z += dx;
+            Some(Self::magnitude(&self.c)) 
+        }
+        else { None };
+
+        if let Some(new_mag) = new_mag {
+            self.c /= new_mag;
+            self.c *= multiplier_to_surface;
+            self.f = -self.c/new_mag; // new forward direction, normalised
+        }
+        else { self.f = -self.c/multiplier_to_surface; }; // recompute f regardless given update function has been called
 
         assert_eq!(Self::magnitude(&self.c), multiplier_to_surface);
-
-        self.f = -self.c/new_mag; // new forward direction, normalised
         let up = Vector3::new(self.c.x, self.c.y + 0.9, self.c.z);
 
         self.r = Self::cross(&up, &self.f);
@@ -59,6 +71,7 @@ impl OrbitalCamera {
 
         self.u = Self::cross(&self.f, &self.r);
         self.u = self.u/Self::magnitude(&self.u); // new up, normalised
+
     }
 
     pub fn new(i: f32, j: f32, k: f32) -> Self {
@@ -80,6 +93,7 @@ impl OrbitalCamera {
         let up = up/Self::magnitude(&up); // norm
 
        OrbitalCamera { 
+        scroll_coeff: 2.0,
         c: pos,
         f: forward, 
         u: up, 

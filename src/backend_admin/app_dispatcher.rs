@@ -1,6 +1,6 @@
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
-use winit::event::{ElementState, InnerSizeWriter, WindowEvent};
+use winit::event::{ElementState, InnerSizeWriter, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::window::{Fullscreen, Window};
 use std::sync::Arc;
@@ -86,7 +86,7 @@ impl ApplicationHandler<State> for App {
                     }
                 }
             },
-            WindowEvent::CursorMoved { device_id, position } => {
+            WindowEvent::CursorMoved { device_id: _device_id, position } => {
                 if let Some(state) = self.state.as_mut(){
                     if state.mouse_is_pressed == true {
                         if let Some(mouse_down) = state.mouse_down{
@@ -95,7 +95,7 @@ impl ApplicationHandler<State> for App {
                                 y: position.y - mouse_down.y
                             };
                             // handle cursor move here
-                            state.camera.update(delta.x as f32, delta.y as f32);
+                            state.camera.update(Some(delta.x as f32), Some(delta.y as f32), None);
                             state.mouse_down = Some(position);
                         }
                         else {
@@ -105,7 +105,18 @@ impl ApplicationHandler<State> for App {
                 }
                 else {println!("No state at cursor moved\n");}
             },
-            // TODO: add zoom gesture, scale magnitude of camera pos 
+            WindowEvent::MouseWheel { device_id: _device_id, delta, phase: _phase } => {
+                if let Some(state) = self.state.as_mut() {
+                    match delta {
+                        MouseScrollDelta::PixelDelta(pos) => {
+                            state.camera.update(None, None, Some(pos.y as f32));
+                        },
+                        MouseScrollDelta::LineDelta(x, y) => {
+                            state.camera.update(None, None, Some(y as f32));
+                        }
+                    }
+                }
+            },
             WindowEvent::KeyboardInput {
                 event: winit::event::KeyEvent {
                         physical_key: winit::keyboard::PhysicalKey::Code(code),
