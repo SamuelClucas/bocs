@@ -1,9 +1,9 @@
 use winit::{dpi::{PhysicalPosition, PhysicalSize}, window::Window};
-use std::sync::Arc;
+use std::{num::NonZero, sync::Arc};
 use crate::world::camera::OrbitalCamera;
 use cgmath::Vector2;
 use anyhow::{Result, Context};
-use wgpu::{util::DeviceExt, BufferUsages};
+use wgpu::{util::DeviceExt, BindGroupEntry, BindGroupLayoutEntry, BufferBinding, BufferBindingType, BufferUsages, PipelineCacheDescriptor, PipelineCompilationOptions, ShaderStages};
 
 
 
@@ -58,12 +58,67 @@ impl State {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("../shader.wgsl").into())
         });
+        
+        let store = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Compute store"),
+            size:  (std::mem::size_of::<f64>()* 200 * 200 * 200) as u64,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false // see shader for init
+        });
 
-        let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[],
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor{
+            label: Some("Bind group layout"),
+            entries: &[BindGroupLayoutEntry{
+                binding: 1,
+                visibility: ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer { 
+                    ty: BufferBindingType::Storage { 
+                    read_only: false }, 
+                    has_dynamic_offset: false, 
+                    min_binding_size: NonZero::new((std::mem::size_of::<f64>()*200*200*200) as u64) },
+                count: None
+                }],
+            
+        });
+
+        let bind_group_descriptor = &wgpu::BindGroupDescriptor {
+            label: Some("Bind group descriptor"),
+            layout: &bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Buffer(BufferBinding{
+                    buffer:  &store,
+                    offset: 0,
+                    size: NonZero::new((std::mem::size_of::<f64>()*200*200*200) as u64)
+            })
+            }]
+        };
+
+        // binding 1
+        let voxel_grid_bind_group = device.create_bind_group(bind_group_descriptor);
+
+        // compute pipeline setup
+        let compute_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Compute Pipeline Layout"),
+            bind_group_layouts: &[&bind_group_layout
+            ],
             push_constant_ranges: &[]
         });
+
+
+        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Laplacian"),
+            layout: Some(&compute_pipeline_layout),
+            module: &shader,
+            entry_point: Some("main"),
+            cache: None,
+            compilation_options: PipelineCompilationOptions{
+                constants: &[],
+                zero_initialize_workgroup_memory: true // Likely needs returning to
+            }
+        });
+
+        
 
         let surface_caps = surface.get_capabilities(&adapter);
 
@@ -82,23 +137,6 @@ impl State {
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
-        // Compute Pipeline and Storage Buffer Creation // 
-
-        let store = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Compute store"),
-            size:  (std::mem::size_of::<f64>()* 200 * 200* 200) as u64,
-            usage: BufferUsages::STORAGE,
-            mapped_at_creation: false // see shader for init
-        });
-
-/* 
-        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("Laplacian"),
-                layout: Some(&wgpu::PipelineLayout{})
-        });
-        */
-
-        // --- //
 
 
         // TEXTURES //
