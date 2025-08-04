@@ -1,18 +1,19 @@
 use cgmath::{InnerSpace, Vector2, Vector3, Vector4};
 use winit::dpi::PhysicalSize;
+use approx::abs_diff_eq;
 
 
 pub struct OrbitalCamera {
-    c: Vector3<f32>, // where c is camera pos in world space, 
-    f: Vector3<f32>, // where f is unit vector from c to world space origin, orthogonal to u and r (u X r)
-    u: Vector3<f32>, // where u is unit vector up from c, orthogonal to f and r (f x r)
-    r: Vector3<f32>, // where r is unit vector right from c, orthogonal to f and u (f X u)  
-    scroll_coeff: f32
+    c: Vector3<f64>, // where c is camera pos in world space, 
+    f: Vector3<f64>, // where f is unit vector from c to world space origin, orthogonal to u and r (u X r)
+    u: Vector3<f64>, // where u is unit vector up from c, orthogonal to f and r (f x r)
+    r: Vector3<f64>, // where r is unit vector right from c, orthogonal to f and u (f X u)  
+    scroll_coeff: f64
 }
 
 impl OrbitalCamera {   
     // returns right-handed, orthogonal vector to a, b
-    pub fn cross(a: &Vector3<f32>, b: &Vector3<f32>) -> Vector3<f32>{
+    pub fn cross(a: &Vector3<f64>, b: &Vector3<f64>) -> Vector3<f64>{
         Vector3::new(
             (a.y * b.z) - (a.z * b.y), // x
             (a.z * b.x) - (a.x * b.z), // y
@@ -20,33 +21,34 @@ impl OrbitalCamera {
         )
     }
     // returns scalar sum of component-wise products of a and b
-    pub fn dot(a: &Vector3<f32>, b: &Vector3<f32>) -> f32{
+    pub fn dot(a: &Vector3<f64>, b: &Vector3<f64>) -> f64{
         (a.x*b.x)+(a.y*b.y)+(a.z*b.z)
     }
 
-    pub fn magnitude(input: &Vector3<f32>) -> f32 {
+    pub fn magnitude(input: &Vector3<f64>) -> f64 {
         let square = Self::dot(input, input);
         square.sqrt()
     }
     // this is moving to the compute shader
-    pub fn world_to_ruf_coeffcients(&self, input: Vector3<f32>) -> Vector3<f32> { // right is x, up is y, forward is z
+    pub fn world_to_ruf_coeffcients(&self, input: Vector3<f64>) -> Vector3<f64> { // right is x, up is y, forward is z
         Vector3::new(
                 Self::dot(&input, &self.r), // right
                 Self::dot(&input, &self.u), // up
                 Self::dot(&input, &self.f) // forward
         )
     }
-
     /// recompute ruf basis vectors on camera movement
-    /// TODO: implement angle-based mapping of dx and dy into world deltas
-    pub fn update(&mut self, dx: Option<f32>, dy: Option<f32>, dscroll: Option<f32>) {
+    /// TODO: implement angle-based mapping of dx and dy into world deltas to avoid normalisation error drift
+    pub fn update(&mut self, dx: Option<f64>, dy: Option<f64>, dscroll: Option<f64>) {
         let multiplier_to_surface = if let Some(d_scroll) = dscroll{
-            self.c /= Self::magnitude(&self.c); // normalise
-            Self::magnitude(&self.c) * -d_scroll * self.scroll_coeff // get new mag
+            let old_mag = Self::magnitude(&self.c);
+            self.c /= old_mag; // normalise
+            let new_mag = (old_mag + (d_scroll * self.scroll_coeff)).clamp(1.0, 500.0);
+            self.c *= new_mag ; // new scaled vector
+            new_mag
         }
         else { Self::magnitude(&self.c)};
-        self.c *= multiplier_to_surface; // new scaled vector
-
+        
         // distribute over components, normalise and scale back to surface
         let new_mag = if let (Some(dx), Some(dy)) = (dx, dy) {
             self.c.x -= dx;
@@ -62,8 +64,14 @@ impl OrbitalCamera {
             self.f = -self.c/new_mag; // new forward direction, normalised
         }
         else { self.f = -self.c/multiplier_to_surface; }; // recompute f regardless given update function has been called
+        let multiplier_to_surface = Self::magnitude(&self.c);  // HACKY FIX!!!
+        
+        assert!(
+            abs_diff_eq!(
+                Self::magnitude(&self.c), 
+                multiplier_to_surface)
+            );
 
-        assert_eq!(Self::magnitude(&self.c), multiplier_to_surface);
         let up = Vector3::new(self.c.x, self.c.y + 0.9, self.c.z);
 
         self.r = Self::cross(&up, &self.f);
@@ -71,10 +79,10 @@ impl OrbitalCamera {
 
         self.u = Self::cross(&self.f, &self.r);
         self.u = self.u/Self::magnitude(&self.u); // new up, normalised
-
+        println!("Magnitude:{}", multiplier_to_surface);
     }
 
-    pub fn new(i: f32, j: f32, k: f32) -> Self {
+    pub fn new(i: f64, j: f64, k: f64) -> Self {
         let pos = Vector3::new(i,j,k);
         let mag = Self::magnitude(&pos);
         // forward is negative camera pos, normalised by its magnitude
@@ -93,7 +101,7 @@ impl OrbitalCamera {
         let up = up/Self::magnitude(&up); // norm
 
        OrbitalCamera { 
-        scroll_coeff: 2.0,
+        scroll_coeff: 0.3,
         c: pos,
         f: forward, 
         u: up, 

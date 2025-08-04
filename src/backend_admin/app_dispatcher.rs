@@ -14,39 +14,54 @@ pub struct App {
     state: Option<State>,
     proxy: Option<EventLoopProxy<State>>,
     aspect_ratio: Option<f32>,
-    size: Option<PhysicalSize<u32>>
+    size: Option<PhysicalSize<u32>>,
+    scale_factor: Option<f64>,
 }
 
 impl App  {
     pub fn new (fun: impl FnOnce()-> EventLoopProxy<State>) -> App {
         App {
+            scale_factor: None,
             state: None,
             proxy:  Some(fun()), // smuggle proxy into app using move closure for downstream requests
             aspect_ratio: None,
             size: None
         }
-    }
-}
+    }}
+
 
 /// implements ApplicationHandler for logical App
 impl ApplicationHandler<State> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) { // ran once on init
         let primary_monitor = event_loop.primary_monitor().expect("No primary monitor\n");
 
-        let dims = primary_monitor.size();
-        self.aspect_ratio = Some(dims.width as f32 / dims.height as f32);
-        self.size = Some(winit::dpi::PhysicalSize::new((dims.width as f32 / 2.0) as u32, (dims.width as f32 / self.aspect_ratio.as_ref().unwrap()) as u32));
+        let physical_dims = primary_monitor.size();
+        self.aspect_ratio = Some(physical_dims.width as f32 / physical_dims.height as f32);
+        let physical_width = physical_dims.width as f32;
+        let physical_height = physical_width as f32 / self.aspect_ratio.as_ref().expect("No aspect ratio in App on resumed()\n");
 
-        let time_step_width = 1.0 / (primary_monitor.refresh_rate_millihertz().unwrap() as f32 / 1000.0); // TODO: update dims and timestepwidth on monitor change
+        let scaled_size = winit::dpi::PhysicalSize::new(
+            physical_width as u32, 
+            physical_height as u32
+        );
+
+        self.size = Some(scaled_size);
+        
+        let time_step_width = primary_monitor.refresh_rate_millihertz()
+        .map(|r| 1.0 / (r as f32 / 1000.0))
+        .unwrap_or_else(|| {
+            println!("Could not determine refresh rate, defaulting to 16.67ms timestep\n");
+            1.0 / 60.0
+        });
 
         // window: logical representation of gpu output, managed by system os
         let window_attributes = Window::default_attributes()
                 .with_title("📦")
                 .with_blur(true)
-                .with_inner_size(self.size.clone().unwrap());
+                .with_inner_size(self.size.clone().expect("No size on window attributes creation\n"));
 
         let window = Arc::new(event_loop.create_window(window_attributes).expect("\x1b[1;31mError creating window\x1b[0m\n"));
-    
+        
         // Need async context for requests
         // hence using tokio::spawn task, use a user event proxy to inject awaits back into app
         if let Some(prx) = self.proxy.take() {
@@ -95,7 +110,7 @@ impl ApplicationHandler<State> for App {
                                 y: position.y - mouse_down.y
                             };
                             // handle cursor move here
-                            state.camera.update(Some(delta.x as f32), Some(delta.y as f32), None);
+                            state.camera.update(Some(delta.x as f64), Some(delta.y as f64), None);
                             state.mouse_down = Some(position);
                         }
                         else {
@@ -109,10 +124,10 @@ impl ApplicationHandler<State> for App {
                 if let Some(state) = self.state.as_mut() {
                     match delta {
                         MouseScrollDelta::PixelDelta(pos) => {
-                            state.camera.update(None, None, Some(pos.y as f32));
+                            state.camera.update(None, None, Some(pos.y as f64));
                         },
                         MouseScrollDelta::LineDelta(x, y) => {
-                            state.camera.update(None, None, Some(y as f32));
+                            state.camera.update(None, None, Some(y as f64));
                         }
                     }
                 }
@@ -129,33 +144,25 @@ impl ApplicationHandler<State> for App {
                 event_loop.exit();
             },
             // scale new size by aspect ratio constraint as in resume()
-            WindowEvent::Resized(size) =>
-            {
-                self.size = Some(PhysicalSize::new(size.width, (size.width as f32 * self.aspect_ratio.as_ref().unwrap()) as u32));
-                state.window.request_inner_size(self.size.clone().unwrap());
-                state.resize(self.size.as_ref().unwrap().width, self.size.as_ref().unwrap().height); // reconfigs surface to match new size dims
-               
-            },
-            // Store scale factor for dynamic DPI-aware resizing for conversion into virtual size (i.e., not physical pixels)
-            // Keep up with monitor resolution changes, as well as monitor switch
-            WindowEvent::ScaleFactorChanged { scale_factor, mut inner_size_writer } => {
-                state.scale_factor = Some(scale_factor);
-            
-                if let Some(size) = self.size.as_mut() {
-                    size.width = state.window.as_ref().inner_size().width;
-                    size.height = (size.width as f32 * self.aspect_ratio.unwrap()) as u32;
-                    inner_size_writer.request_inner_size(size.clone());
-                    state.resize(size.width, size.height);
+            WindowEvent::Resized(size) => {
+                if let Some(ar) = self.aspect_ratio {
+                    if size.height != self.size.as_ref().unwrap().height {
+                        let new_width= (size.height as f32 * ar)as u32;
+                        self.size = Some(PhysicalSize::new(new_width, size.height));
+                        state.is_surface_configured = false;
+                        state.window.request_redraw();
+                    }
+                    else {
+                        self.size = Some(PhysicalSize::new(size.width, (size.width as f32 / ar) as u32));
+                        state.is_surface_configured = false;
+                        state.window.request_redraw();
+                    }
                 }
-            },            
+                else { println!("No aspect ratio in resized yet\n"); }
+            },       
             WindowEvent::RedrawRequested => {
-                match state.render() {
+                match state.render(self.size) {
                     Ok(_) => {},
-                    // Reconfigure the surface if it's lost or outdated
-                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        let size = state.window.inner_size();
-                        state.resize(size.width, size.height);
-                    },
                     Err(e) => {
                         println!("Unable to render {}", e);
                     }
@@ -163,5 +170,5 @@ impl ApplicationHandler<State> for App {
             },
             _ => {()},
         }
-    }
+        }
     }

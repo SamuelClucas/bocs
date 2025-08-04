@@ -1,4 +1,4 @@
-use winit::{dpi::PhysicalPosition, window::Window};
+use winit::{dpi::{PhysicalPosition, PhysicalSize}, window::Window};
 use std::sync::Arc;
 use crate::world::camera::OrbitalCamera;
 use cgmath::Vector2;
@@ -14,10 +14,10 @@ pub struct State {
     pub window: Arc<Window>,
     surface: wgpu::Surface<'static>,
     surf_config: wgpu::SurfaceConfiguration,
-    is_surface_configured: bool,
+    pub is_surface_configured: bool,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    pub scale_factor: Option<f64>,
+    
     pub camera: OrbitalCamera
    // pipeline: wgpu::RenderPipeline,
 
@@ -145,7 +145,7 @@ impl State {
             cache: None, 
         });
 */
-        let scale_factor = Some(window.as_ref().scale_factor()); 
+        
 
         //surface.configure(&device, &config);
 
@@ -156,7 +156,7 @@ impl State {
                 device,
                 queue,
                 surface,
-                scale_factor,
+
               //  pipeline: render_pipeline,
                 surf_config: config,
                 is_surface_configured: false,
@@ -186,12 +186,16 @@ impl State {
         }
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        self.window.request_redraw();
+    pub fn render(&mut self, size: Option<PhysicalSize<u32>>) -> Result<(), wgpu::SurfaceError> {
+        if let Some(size) = size {
 
-        if! self.is_surface_configured {
-            self.surface.configure(&self.device, &self.surf_config);
-        } 
+            if! self.is_surface_configured {
+                self.resize(size.width, size.height); // reconfigs surface to match new size dims
+            } 
+            let _ = self.window.request_inner_size(size);
+        }
+        else {println!("No size passed to render\n") }
+                   
         // this owns the texture, wrapping it with some extra swapchain-related info
         let output = self.surface.get_current_texture()?;
         // this defines how the texture is interpreted (sampled) to produce the actual pixel outputs to the surface
