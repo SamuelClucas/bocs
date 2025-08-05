@@ -9,7 +9,7 @@ I'm building a tool for exploring emergent behaviour in soft matter systems.
 
 ## Current Status: See plan updates [here](./docs/Current%20Plan.md)  
 > [!NOTE]
-> This is an early-stage, work-in-progress project. I'm building everything from scratch — the rendering pipeline, the simulation logic, and the core data structures — which means progress is steady but intentional.  \n
+> This is an early-stage, work-in-progress project. I'm building everything from scratch — the rendering pipeline, the simulation logic, and the core data structures — which means progress is steady but intentional.  </br>
 > Currently, the app should be ran on one monitor only (no switching). This is due to a lack of perceived clarity and consistency across platforms using winit's dpi crate. See [here](../../docs/lights%20camera%20action/The%20Near%20Plane.md) for notes on my implementation of a camera frustum and why the aspect ratio of the window is integral to the app's functionality. I plan to address DPI-awareness in future updates.
 
 Expect:
