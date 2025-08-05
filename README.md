@@ -3,7 +3,7 @@
 
 ## A 3D Mesoscopic Cell Simulation Engine in Rust
 
-***bocs*** is a low-level 3D simulation engine for modelling biological systems at the mesoscopic scale — with a specific focus on **membrane physics and lipid self-assembly**. Built entirely in **Rust**, it aims to balance **scientific realism** with **performance** through the efficient use of compute shaders with a minimalist render pipeline.
+***bocs*** is a low-level 3D simulation engine for modelling biological systems at the mesoscopic scale — with a specific focus on **membrane physics and lipid self-assembly**. Built entirely in **Rust**, it aims to balance **scientific realism** with **performance** through the efficient use of compute shaders and a minimalist render pipeline.
 
 For a theoretical overview of the engine's functionality, please see the docs [here](./docs/README.md).  
 
