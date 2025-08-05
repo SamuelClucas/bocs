@@ -4,7 +4,7 @@ use approx::abs_diff_eq;
 
 
 pub struct OrbitalCamera {
-    c: Vector3<f64>, // where c is camera pos in world space, 
+    pub c: Vector3<f64>, // where c is camera pos in world space, 
     f: Vector3<f64>, // where f is unit vector from c to world space origin, orthogonal to u and r (u X r)
     u: Vector3<f64>, // where u is unit vector up from c, orthogonal to f and r (f x r)
     r: Vector3<f64>, // where r is unit vector right from c, orthogonal to f and u (f X u)  

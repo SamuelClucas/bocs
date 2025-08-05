@@ -1,2 +1,0 @@
-@compute
-fn main() -> {}

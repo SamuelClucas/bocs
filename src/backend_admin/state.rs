@@ -3,9 +3,15 @@ use std::{num::NonZero, sync::Arc};
 use crate::world::camera::OrbitalCamera;
 use cgmath::Vector2;
 use anyhow::{Result, Context};
-use wgpu::{util::DeviceExt, BindGroupEntry, BindGroupLayoutEntry, BufferBinding, BufferBindingType, BufferUsages, PipelineCacheDescriptor, PipelineCompilationOptions, ShaderStages};
+use wgpu::{util::DeviceExt, BindGroup, BindGroupEntry, BindGroupLayoutEntry, BufferBinding, BufferBindingType, BufferUsages, ComputePipeline, PipelineCacheDescriptor, PipelineCompilationOptions, ShaderStages};
 
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct Uniforms {
+    timestep: f32,
+    cam_pos: [f64; 3],
+}
 
 
 pub struct State {
@@ -17,7 +23,8 @@ pub struct State {
     pub is_surface_configured: bool,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    
+    compute_pipeline: Option<ComputePipeline>,
+    voxel_grid_bg: Option<BindGroup>,
     pub camera: OrbitalCamera
    // pipeline: wgpu::RenderPipeline,
 
@@ -56,7 +63,7 @@ impl State {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../shader.wgsl").into())
+            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into())
         });
         
         let store = device.create_buffer(&wgpu::BufferDescriptor {
@@ -65,6 +72,17 @@ impl State {
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false // see shader for init
         });
+
+        let uniforms = Uniforms {
+            cam_pos: [camera.c.x, camera.c.y, camera.c.z],
+            timestep: 0.0
+        };
+        let uni = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Uniform buffer"),
+            contents: &[uniforms ],
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+        
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor{
             label: Some("Bind group layout"),
@@ -94,7 +112,7 @@ impl State {
             }]
         };
 
-        // binding 1
+        // binding 1, assigned to index 0 in render
         let voxel_grid_bind_group = device.create_bind_group(bind_group_descriptor);
 
         // compute pipeline setup
@@ -118,7 +136,6 @@ impl State {
             }
         });
 
-        
 
         let surface_caps = surface.get_capabilities(&adapter);
 
@@ -194,12 +211,13 @@ impl State {
                 device,
                 queue,
                 surface,
-
+                compute_pipeline: Some(compute_pipeline),
               //  pipeline: render_pipeline,
                 surf_config: config,
                 is_surface_configured: false,
                 mouse_down: None,
-                camera: camera
+                camera: camera,
+                voxel_grid_bg: Some(voxel_grid_bind_group)
 
             }
         )
@@ -243,6 +261,21 @@ impl State {
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Command Encoder")
         });
+
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor{
+                label: Some("Computa"),
+                timestamp_writes: None
+                });
+            
+
+            
+
+            compute_pass.set_pipeline(self.compute_pipeline.as_ref().unwrap());
+            compute_pass.set_bind_group(0, self.voxel_grid_bg.as_ref().unwrap(), &[]); 
+            compute_pass.dispatch_workgroups(25, 25, 25); // group size is 8,8,8 to yield 200*200*200 active threads
+        }
+
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { // mutable borrow of encoder here
                 label: Some("Render Pass"),

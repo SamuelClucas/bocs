@@ -270,7 +270,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "approx 0.5.1",
- "bytemuck",
  "cgmath",
  "env_logger",
  "pollster",
