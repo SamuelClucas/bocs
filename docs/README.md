@@ -29,5 +29,5 @@ I've written notes that feel approachable, explicit, and precise. Please read th
     ...[A Brief Introduction](./wgpu%20setup/A%20Brief%20Introduction.md)  
     ...[Asynchronous Programming](./wgpu%20setup/Asynchronous%20Programming.md)  
 3. lights, camera, action  
-    ...[The Near Plane](./lights%20camera%20action/The%20Near%20Plane.md)  **preliminary**  
+    ...[Setting the Scene](./lights%20camera%20action/Setting%20the%20Scene.md)  **preliminary**  
 Appendix. [Current Plan](./Current%20Plan.md)
