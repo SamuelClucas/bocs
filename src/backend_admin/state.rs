@@ -9,8 +9,22 @@ use wgpu::{util::DeviceExt, BindGroup, BindGroupEntry, BindGroupLayoutEntry, Buf
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct Uniforms {
-    timestep: f32,
-    cam_pos: [f64; 3],
+    cam_pos_f_u_r_timestep: [f32; 13], // 0-2: camera position, 3-5: forward, 6-8: up, 9-11: right, 12: timestep. Required for projecting world onto camera basis
+}
+
+impl Uniforms {
+    pub fn flatten_u8(&self) -> &[u8] {
+        let ptr = self.cam_pos_f_u_r_timestep.as_ptr() as *const u8;
+        let padding = 3; 
+        let len = (self.cam_pos_f_u_r_timestep.len() + padding) * std::mem::size_of::<f64>(); // add 3 to pad from 52 to 64 bytes (2^4 alignment)
+        // 4* Vec3<f32> + 1* f32 + PADDING
+        // TOTAL - PADDING = 52 bytes
+        // PADDING = 
+
+        unsafe {
+            std::slice::from_raw_parts(ptr, len)
+        }
+    }
 }
 
 
@@ -66,7 +80,7 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into())
         });
         
-        let store = device.create_buffer(&wgpu::BufferDescriptor {
+        let voxel_grid_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Compute store"),
             size:  (std::mem::size_of::<f64>()* 200 * 200 * 200) as u64,
             usage: BufferUsages::STORAGE,
@@ -74,15 +88,19 @@ impl State {
         });
 
         let uniforms = Uniforms {
-            cam_pos: [camera.c.x, camera.c.y, camera.c.z],
-            timestep: 0.0
+            cam_pos_f_u_r_timestep: [
+                camera.c.x, camera.c.y, camera.c.z, 
+                camera.f.x, camera.f.y, camera.f.z,
+                camera.u.x, camera.u.y,camera.u.z,
+                camera.r.x, camera.r.y, camera.r.z,
+                0.0 as f64
+                ],
         };
         let uni = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform buffer"),
-            contents: &[uniforms ],
+            contents: uniforms.flatten_u8(),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
-        
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor{
             label: Some("Bind group layout"),
@@ -90,7 +108,7 @@ impl State {
                 binding: 1,
                 visibility: ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer { 
-                    ty: BufferBindingType::Storage { 
+                    ty: BufferBindingType::Storage { // voxel grid storage buffer specification
                     read_only: false }, 
                     has_dynamic_offset: false, 
                     min_binding_size: NonZero::new((std::mem::size_of::<f64>()*200*200*200) as u64) },
@@ -104,8 +122,8 @@ impl State {
             layout: &bind_group_layout,
             entries: &[BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Buffer(BufferBinding{
-                    buffer:  &store,
+                resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
+                    buffer:  &voxel_grid_buffer,
                     offset: 0,
                     size: NonZero::new((std::mem::size_of::<f64>()*200*200*200) as u64)
             })
@@ -267,12 +285,12 @@ impl State {
                 label: Some("Computa"),
                 timestamp_writes: None
                 });
-            
-
-            
+        
 
             compute_pass.set_pipeline(self.compute_pipeline.as_ref().unwrap());
+            // voxelgrid storage buffer index 0 binding 1
             compute_pass.set_bind_group(0, self.voxel_grid_bg.as_ref().unwrap(), &[]); 
+
             compute_pass.dispatch_workgroups(25, 25, 25); // group size is 8,8,8 to yield 200*200*200 active threads
         }
 

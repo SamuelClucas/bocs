@@ -4,16 +4,16 @@ use approx::abs_diff_eq;
 
 
 pub struct OrbitalCamera {
-    pub c: Vector3<f64>, // where c is camera pos in world space, 
-    f: Vector3<f64>, // where f is unit vector from c to world space origin, orthogonal to u and r (u X r)
-    u: Vector3<f64>, // where u is unit vector up from c, orthogonal to f and r (f x r)
-    r: Vector3<f64>, // where r is unit vector right from c, orthogonal to f and u (f X u)  
-    scroll_coeff: f64
+    pub c: Vector3<f32>, // where c is camera pos in world space, 
+    pub f: Vector3<f32>, // where f is unit vector from c to world space origin, orthogonal to u and r (u X r)
+    pub u: Vector3<f32>, // where u is unit vector up from c, orthogonal to f and r (f x r)
+    pub r: Vector3<f32>, // where r is unit vector right from c, orthogonal to f and u (f X u)  
+    scroll_coeff: f32
 }
 
 impl OrbitalCamera {   
     // returns right-handed, orthogonal vector to a, b
-    pub fn cross(a: &Vector3<f64>, b: &Vector3<f64>) -> Vector3<f64>{
+    pub fn cross(a: &Vector3<f32>, b: &Vector3<f32>) -> Vector3<f32>{
         Vector3::new(
             (a.y * b.z) - (a.z * b.y), // x
             (a.z * b.x) - (a.x * b.z), // y
@@ -21,16 +21,16 @@ impl OrbitalCamera {
         )
     }
     // returns scalar sum of component-wise products of a and b
-    pub fn dot(a: &Vector3<f64>, b: &Vector3<f64>) -> f64{
+    pub fn dot(a: &Vector3<f32>, b: &Vector3<f32>) -> f32{
         (a.x*b.x)+(a.y*b.y)+(a.z*b.z)
     }
 
-    pub fn magnitude(input: &Vector3<f64>) -> f64 {
+    pub fn magnitude(input: &Vector3<f32>) -> f32 {
         let square = Self::dot(input, input);
         square.sqrt()
     }
     // this is moving to the compute shader
-    pub fn world_to_ruf_coeffcients(&self, input: Vector3<f64>) -> Vector3<f64> { // right is x, up is y, forward is z
+    pub fn world_to_ruf_coeffcients(&self, input: Vector3<f32>) -> Vector3<f32> { // right is x, up is y, forward is z
         Vector3::new(
                 Self::dot(&input, &self.r), // right
                 Self::dot(&input, &self.u), // up
@@ -39,7 +39,7 @@ impl OrbitalCamera {
     }
     /// recompute ruf basis vectors on camera movement
     /// TODO: implement angle-based mapping of dx and dy into world deltas to avoid normalisation error drift
-    pub fn update(&mut self, dx: Option<f64>, dy: Option<f64>, dscroll: Option<f64>) {
+    pub fn update(&mut self, dx: Option<f32>, dy: Option<f32>, dscroll: Option<f32>) {
         let multiplier_to_surface = if let Some(d_scroll) = dscroll{
             let old_mag = Self::magnitude(&self.c);
             self.c /= old_mag; // normalise
@@ -82,7 +82,7 @@ impl OrbitalCamera {
         println!("Magnitude:{}", multiplier_to_surface);
     }
 
-    pub fn new(i: f64, j: f64, k: f64) -> Self {
+    pub fn new(i: f32, j: f32, k: f32) -> Self {
         let pos = Vector3::new(i,j,k);
         let mag = Self::magnitude(&pos);
         // forward is negative camera pos, normalised by its magnitude
