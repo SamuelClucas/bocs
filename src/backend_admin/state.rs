@@ -10,18 +10,23 @@ use rand::prelude::*;
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct Uniforms {
-    cam_pos_f_u_r_timestep: [f32; 14], // 0-2: camera position, 3-5: forward, 6-8: up, 9-11: right, 12: timestep, 13: random seed. Required for projecting world onto camera basis
+    // 0-2: camera position, 3-5: forward, 6-8: up, 9-11: right, 12: timestep, 13: random seed. Required for projecting world onto camera basis
+    cam_pos: [f32; 4],
+    forward: [f32; 4],
+    up: [f32; 4],
+    right: [f32; 4],
+    timestep: [f32; 4],
+    seed: [f32; 4],
+
 }
 
 impl Uniforms {
     pub fn flatten_u8(&self) -> &[u8] {
-        let ptr = self.cam_pos_f_u_r_timestep.as_ptr() as *const u8;
-        let padding = 2; 
-        let len = (self.cam_pos_f_u_r_timestep.len() + padding) * std::mem::size_of::<f64>(); // add 2 to pad from 56 to 64 bytes (2^4 alignment)
-        // 4* Vec3<f32> + 2* f32 + PADDING
-        // TOTAL - PADDING = 56 bytes
-        
+        let ptr = self as *const _ as *const u8;
 
+        let len = std::mem::size_of::<Uniforms>(); 
+        // Each f32 padded rhs with 12 bytes to 16 byte alignment
+        
         unsafe {
             std::slice::from_raw_parts(ptr, len)
         }
@@ -87,17 +92,15 @@ impl State {
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false // see shader for init
         });
-        
+
         let mut rng = rand::rng();
         let uniforms = Uniforms {
-            cam_pos_f_u_r_timestep: [
-                camera.c.x, camera.c.y, camera.c.z, 
-                camera.f.x, camera.f.y, camera.f.z,
-                camera.u.x, camera.u.y,camera.u.z,
-                camera.r.x, camera.r.y, camera.r.z,
-                0.0 as f32,
-                rng.random::<f32>()
-                ],
+            cam_pos: [camera.c.x, camera.c.y, camera.c.z, 0.0 as f32],
+            forward: [camera.f.x, camera.f.y, camera.f.z, 0.0 as f32],
+            up: [camera.u.x, camera.u.y, camera.u.z, 0.0 as f32],
+            right: [camera.r.x, camera.r.y, camera.r.z, 0.0 as f32],
+            timestep: [0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32],
+            seed: [rng.random::<f32>(), 0.0 as f32, 0.0 as f32, 0.0 as f32]
         };
         let uni = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform buffer"),
@@ -113,7 +116,7 @@ impl State {
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
-                    min_binding_size: NonZero::new((std::mem::size_of::<f32>() * 16) as u64),
+                    min_binding_size: NonZero::new((std::mem::size_of::<Uniforms>()) as u64),
                 },
                 count: None
                 }, BindGroupLayoutEntry{
@@ -123,7 +126,7 @@ impl State {
                     ty: BufferBindingType::Storage { // voxel grid storage buffer specification
                     read_only: false }, 
                     has_dynamic_offset: false, 
-                    min_binding_size: NonZero::new((std::mem::size_of::<f32>()*200*200*200) as u64) },
+                    min_binding_size: NonZero::new((std::mem::size_of::<f32>()*200*200*200) as u64)},
                 count: None
                 }],
             
@@ -137,7 +140,7 @@ impl State {
                 resource: wgpu::BindingResource::Buffer(BufferBinding { 
                     buffer: &uni, 
                     offset: 0, 
-                    size: NonZero::new((std::mem::size_of::<f32>()*16) as u64)
+                    size: NonZero::new((std::mem::size_of::<Uniforms>()) as u64)
                 }),
             },
             BindGroupEntry {
@@ -311,7 +314,7 @@ impl State {
             // voxelgrid storage buffer index 0 binding 1
             compute_pass.set_bind_group(0, self.voxel_grid_bg.as_ref().unwrap(), &[]); 
 
-            compute_pass.dispatch_workgroups(25, 25, 25); // group size is 8,8,8 to yield 200*200*200 active threads
+            compute_pass.dispatch_workgroups(200/8, 200/4, 200/8); // group size is 8,8,8 to yield 200*200*200 active threads
         }
 
         {
