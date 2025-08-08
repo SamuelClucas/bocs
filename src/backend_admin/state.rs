@@ -5,22 +5,22 @@ use crate::world::camera::OrbitalCamera;
 use cgmath::Vector2;
 use anyhow::{Result, Context};
 use wgpu::{util::DeviceExt, BindGroup, BindGroupEntry, BindGroupLayoutEntry, BufferBinding, BufferBindingType, BufferUsages, ComputePipeline, PipelineCacheDescriptor, PipelineCompilationOptions, ShaderStages};
-
+use rand::prelude::*;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct Uniforms {
-    cam_pos_f_u_r_timestep: [f32; 13], // 0-2: camera position, 3-5: forward, 6-8: up, 9-11: right, 12: timestep. Required for projecting world onto camera basis
+    cam_pos_f_u_r_timestep: [f32; 14], // 0-2: camera position, 3-5: forward, 6-8: up, 9-11: right, 12: timestep, 13: random seed. Required for projecting world onto camera basis
 }
 
 impl Uniforms {
     pub fn flatten_u8(&self) -> &[u8] {
         let ptr = self.cam_pos_f_u_r_timestep.as_ptr() as *const u8;
-        let padding = 3; 
-        let len = (self.cam_pos_f_u_r_timestep.len() + padding) * std::mem::size_of::<f64>(); // add 3 to pad from 52 to 64 bytes (2^4 alignment)
-        // 4* Vec3<f32> + 1* f32 + PADDING
-        // TOTAL - PADDING = 52 bytes
-        // PADDING = 
+        let padding = 2; 
+        let len = (self.cam_pos_f_u_r_timestep.len() + padding) * std::mem::size_of::<f64>(); // add 2 to pad from 56 to 64 bytes (2^4 alignment)
+        // 4* Vec3<f32> + 2* f32 + PADDING
+        // TOTAL - PADDING = 56 bytes
+        
 
         unsafe {
             std::slice::from_raw_parts(ptr, len)
@@ -87,14 +87,16 @@ impl State {
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false // see shader for init
         });
-
+        
+        let mut rng = rand::rng();
         let uniforms = Uniforms {
             cam_pos_f_u_r_timestep: [
                 camera.c.x, camera.c.y, camera.c.z, 
                 camera.f.x, camera.f.y, camera.f.z,
                 camera.u.x, camera.u.y,camera.u.z,
                 camera.r.x, camera.r.y, camera.r.z,
-                0.0 as f32
+                0.0 as f32,
+                rng.random::<f32>()
                 ],
         };
         let uni = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
