@@ -1,3 +1,4 @@
+use rand_distr::uniform;
 use winit::{dpi::{PhysicalPosition, PhysicalSize}, window::Window};
 use std::{num::NonZero, sync::Arc};
 use crate::world::camera::OrbitalCamera;
@@ -82,7 +83,7 @@ impl State {
         
         let voxel_grid_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Compute store"),
-            size:  (std::mem::size_of::<f64>()* 200 * 200 * 200) as u64,
+            size:  (std::mem::size_of::<f32>()* 200 * 200 * 200) as u64,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false // see shader for init
         });
@@ -93,7 +94,7 @@ impl State {
                 camera.f.x, camera.f.y, camera.f.z,
                 camera.u.x, camera.u.y,camera.u.z,
                 camera.r.x, camera.r.y, camera.r.z,
-                0.0 as f64
+                0.0 as f32
                 ],
         };
         let uni = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -104,14 +105,23 @@ impl State {
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor{
             label: Some("Bind group layout"),
-            entries: &[BindGroupLayoutEntry{
+            entries: &[BindGroupLayoutEntry{ 
+                binding: 0,
+                visibility: ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: NonZero::new((std::mem::size_of::<f32>() * 16) as u64),
+                },
+                count: None
+                }, BindGroupLayoutEntry{
                 binding: 1,
                 visibility: ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer { 
                     ty: BufferBindingType::Storage { // voxel grid storage buffer specification
                     read_only: false }, 
                     has_dynamic_offset: false, 
-                    min_binding_size: NonZero::new((std::mem::size_of::<f64>()*200*200*200) as u64) },
+                    min_binding_size: NonZero::new((std::mem::size_of::<f32>()*200*200*200) as u64) },
                 count: None
                 }],
             
@@ -121,17 +131,25 @@ impl State {
             label: Some("Bind group descriptor"),
             layout: &bind_group_layout,
             entries: &[BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(BufferBinding { 
+                    buffer: &uni, 
+                    offset: 0, 
+                    size: NonZero::new((std::mem::size_of::<f32>()*16) as u64)
+                }),
+            },
+            BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
                     buffer:  &voxel_grid_buffer,
                     offset: 0,
-                    size: NonZero::new((std::mem::size_of::<f64>()*200*200*200) as u64)
+                    size: NonZero::new((std::mem::size_of::<f32>()*200*200*200) as u64)
             })
             }]
         };
 
         // binding 1, assigned to index 0 in render
-        let voxel_grid_bind_group = device.create_bind_group(bind_group_descriptor);
+        let uniform_and_storage = device.create_bind_group(bind_group_descriptor);
 
         // compute pipeline setup
         let compute_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -235,7 +253,7 @@ impl State {
                 is_surface_configured: false,
                 mouse_down: None,
                 camera: camera,
-                voxel_grid_bg: Some(voxel_grid_bind_group)
+                voxel_grid_bg: Some(uniform_and_storage)
 
             }
         )

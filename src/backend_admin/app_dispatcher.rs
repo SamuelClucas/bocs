@@ -110,7 +110,7 @@ impl ApplicationHandler<State> for App {
                                 y: position.y - mouse_down.y
                             };
                             // handle cursor move here
-                            state.camera.update(Some(delta.x as f64), Some(delta.y as f64), None);
+                            state.camera.update(Some(delta.x as f32), Some(delta.y as f32), None);
                             state.mouse_down = Some(position);
                         }
                         else {
@@ -124,10 +124,10 @@ impl ApplicationHandler<State> for App {
                 if let Some(state) = self.state.as_mut() {
                     match delta {
                         MouseScrollDelta::PixelDelta(pos) => {
-                            state.camera.update(None, None, Some(pos.y as f64));
+                            state.camera.update(None, None, Some(pos.y as f32));
                         },
                         MouseScrollDelta::LineDelta(x, y) => {
-                            state.camera.update(None, None, Some(y as f64));
+                            state.camera.update(None, None, Some(y as f32));
                         }
                     }
                 }
