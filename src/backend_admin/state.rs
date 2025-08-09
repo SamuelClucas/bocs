@@ -4,8 +4,9 @@ use std::{num::NonZero, sync::Arc};
 use crate::world::camera::OrbitalCamera;
 use cgmath::Vector2;
 use anyhow::{Result, Context};
-use wgpu::{util::DeviceExt, BindGroup, BindGroupEntry, BindGroupLayoutEntry, BufferBinding, BufferBindingType, BufferUsages, ComputePipeline, PipelineCacheDescriptor, PipelineCompilationOptions, ShaderStages};
+use wgpu::{naga::StorageAccess, util::DeviceExt, wgt::TextureDescriptor, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutEntry, BufferBinding, BufferBindingType, BufferUsages, ComputePipeline, Extent3d, PipelineCacheDescriptor, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
 use rand::prelude::*;
+use wgpu::TextureUsages;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -44,9 +45,10 @@ pub struct State {
     device: wgpu::Device,
     queue: wgpu::Queue,
     compute_pipeline: Option<ComputePipeline>,
-    voxel_grid_bg: Option<BindGroup>,
-    pub camera: OrbitalCamera
-   // pipeline: wgpu::RenderPipeline,
+    uniforms_voxels_storagetexture: Option<BindGroup>,
+    pub camera: OrbitalCamera,
+    pipeline: Option<wgpu::RenderPipeline>,
+    render_bind_group: Option<BindGroup>
 
 
 }
@@ -74,16 +76,16 @@ impl State {
 
         let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor{
             label: None,
-            required_features: wgpu::Features::POLYGON_MODE_LINE,
+            required_features: wgpu::Features::default(), //wgpu::Features::POLYGON_MODE_LINE,
             required_limits: wgpu::Limits::defaults(),
             trace: wgpu::Trace::Off,
             memory_hints: Default::default(),
         }).await?;
 
-
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into())
+        // COMPUTE //
+        let init = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Init"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/init.wgsl").into())
         });
         
         let voxel_grid_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -108,6 +110,33 @@ impl State {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
+        let storage_texture = device.create_texture(&TextureDescriptor{
+            label: Some("Storage Texture"),
+            size: Extent3d {
+                width: size.width, // TODO: CREATE NEW TEXTURE ON WINDOW RESIZE
+                height: size.height,
+                depth_or_array_layers: 1
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::STORAGE_BINDING,
+            view_formats: &[wgpu::TextureFormat::Rgba8Unorm]
+        });
+
+        let texture_view = storage_texture.create_view(&TextureViewDescriptor{
+            label: Some("Texture View"),
+            format: Some(wgpu::TextureFormat::Rgba8Unorm),
+            dimension: Some(wgpu::TextureViewDimension::D2),
+            usage: None,
+            aspect: wgpu::TextureAspect::All,
+            base_mip_level: 0,
+            mip_level_count: None,
+            base_array_layer: 0,
+            array_layer_count:None
+        });
+
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor{
             label: Some("Bind group layout"),
             entries: &[BindGroupLayoutEntry{ 
@@ -128,7 +157,16 @@ impl State {
                     has_dynamic_offset: false, 
                     min_binding_size: NonZero::new((std::mem::size_of::<f32>()*200*200*200) as u64)},
                 count: None
-                }],
+                },
+                BindGroupLayoutEntry{
+                    binding: 2,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::StorageTexture { 
+                        access: wgpu::StorageTextureAccess::WriteOnly, 
+                        format: wgpu::TextureFormat::Rgba8Unorm, 
+                        view_dimension: wgpu::TextureViewDimension::D2 },
+                    count: None}
+                    ],
             
         });
 
@@ -150,11 +188,16 @@ impl State {
                     offset: 0,
                     size: NonZero::new((std::mem::size_of::<f32>()*200*200*200) as u64)
             })
-            }]
+            },
+            BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::TextureView(&texture_view)
+            }
+            ]
         };
 
         // binding 1, assigned to index 0 in render
-        let uniform_and_storage = device.create_bind_group(bind_group_descriptor);
+        let uniforms_voxels_storagetexture = device.create_bind_group(bind_group_descriptor);
 
         // compute pipeline setup
         let compute_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -164,11 +207,10 @@ impl State {
             push_constant_ranges: &[]
         });
 
-
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Laplacian"),
             layout: Some(&compute_pipeline_layout),
-            module: &shader,
+            module: &init,
             entry_point: Some("main"),
             cache: None,
             compilation_options: PipelineCompilationOptions{
@@ -176,7 +218,7 @@ impl State {
                 zero_initialize_workgroup_memory: true // Likely needs returning to
             }
         });
-
+        // END of COMPUTE //
 
         let surface_caps = surface.get_capabilities(&adapter);
 
@@ -196,16 +238,56 @@ impl State {
             desired_maximum_frame_latency: 2,
         };
 
-
         // TEXTURES //
-/* 
-        //--//
+        let fragment = device.create_shader_module(ShaderModuleDescriptor{
+            label: Some("Fragment shader module"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/fragment.wgsl").into())
+        });
+
+        let vertex = device.create_shader_module(
+            ShaderModuleDescriptor { 
+                label: Some("Vertex shader module"), 
+                source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/vertex.wgsl").into()) 
+            });
+
+        
+        let render_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor{
+            label: Some("Render Bind Group Layout"),
+            entries: &[
+                BindGroupLayoutEntry{
+                binding: 0,
+                visibility: ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::StorageTexture { 
+                    access: wgpu::StorageTextureAccess::ReadOnly, 
+                    format: TextureFormat::Rgba8Unorm, 
+                    view_dimension: wgpu::TextureViewDimension::D2 },
+                count: None
+            }
+            ]
+
+        });
+
+        let render_bind_group = device.create_bind_group(&BindGroupDescriptor{
+            label: Some("Render Bind Group"),
+            layout: &render_bind_group_layout,
+            entries: &[BindGroupEntry{
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&texture_view)
+            }]
+        });
+
+        let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor{
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[&render_bind_group_layout],
+            push_constant_ranges: &[]
+        });
+
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor { 
             label: Some("MeowPipeline"), 
             layout: Some(&render_pipeline_layout), 
             vertex: wgpu::VertexState{
-                module: &shader,
-                entry_point: Some("vs_main"), 
+                module: &vertex,
+                entry_point: Some("main"), 
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 buffers: &[]
             }, 
@@ -215,7 +297,7 @@ impl State {
                 front_face: wgpu::FrontFace::Ccw, 
                 cull_mode: Some(wgpu::Face::Back),
                 // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-                polygon_mode: wgpu::PolygonMode::Line,
+                polygon_mode: wgpu::PolygonMode::Fill,
                 // Requires Features::DEPTH_CLIP_CONTROL
                 unclipped_depth: false,
                 // Requires Features::CONSERVATIVE_RASTERIZATION
@@ -228,8 +310,8 @@ impl State {
                     alpha_to_coverage_enabled: false, 
                 }, 
             fragment: Some(wgpu::FragmentState { // needed to store colour data to the surface
-               module: &shader,
-               entry_point: Some("fs_main"),
+               module: &fragment,
+               entry_point: Some("main"),
                compilation_options: wgpu::PipelineCompilationOptions::default(),
                targets: &[Some(wgpu::ColorTargetState {
                     format: config.format, // format of surface
@@ -240,10 +322,6 @@ impl State {
             multiview: None, 
             cache: None, 
         });
-*/
-        
-
-        //surface.configure(&device, &config);
 
         Ok (
             Self { 
@@ -253,12 +331,13 @@ impl State {
                 queue,
                 surface,
                 compute_pipeline: Some(compute_pipeline),
-              //  pipeline: render_pipeline,
+                pipeline: Some(render_pipeline),
                 surf_config: config,
                 is_surface_configured: false,
                 mouse_down: None,
                 camera: camera,
-                voxel_grid_bg: Some(uniform_and_storage)
+                uniforms_voxels_storagetexture: Some(uniforms_voxels_storagetexture),
+                render_bind_group: Some(render_bind_group)
 
             }
         )
@@ -312,7 +391,7 @@ impl State {
 
             compute_pass.set_pipeline(self.compute_pipeline.as_ref().unwrap());
             // voxelgrid storage buffer index 0 binding 1
-            compute_pass.set_bind_group(0, self.voxel_grid_bg.as_ref().unwrap(), &[]); 
+            compute_pass.set_bind_group(0, self.uniforms_voxels_storagetexture.as_ref().unwrap(), &[]); 
 
             compute_pass.dispatch_workgroups(200/8, 200/4, 200/8); // group size is 8,8,8 to yield 200*200*200 active threads
         }
@@ -339,8 +418,9 @@ impl State {
                 timestamp_writes: None,
             });
 
-          //  render_pass.set_pipeline(&self.pipeline);
-           // render_pass.draw(0..0,0..0);
+            render_pass.set_pipeline(self.pipeline.as_ref().unwrap());
+            render_pass.set_bind_group(0, Some(self.render_bind_group.as_ref().unwrap()), &[]);
+            render_pass.draw(0..2, 0..1);
         } // encoder borrow dropped here
     
         // submit will accept anything that implements IntoIter
