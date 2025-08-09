@@ -48,8 +48,11 @@ pub struct State {
     uniforms_voxels_storagetexture: Option<BindGroup>,
     pub camera: OrbitalCamera,
     pipeline: Option<wgpu::RenderPipeline>,
-    render_bind_group: Option<BindGroup>
-
+    render_bind_group: Option<BindGroup>,
+    uniform_buffer: Option<wgpu::Buffer>,
+    voxel_grid_buffer: Option<wgpu::Buffer>,
+    compute_bind_group_layout: Option<BindGroupLayout>,
+    render_bind_group_layout: Option<BindGroupLayout>,
 
 }
 
@@ -121,7 +124,7 @@ impl State {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::STORAGE_BINDING,
+            usage: TextureUsages::STORAGE_BINDING,
             view_formats: &[wgpu::TextureFormat::Rgba8Unorm]
         });
 
@@ -215,7 +218,7 @@ impl State {
             cache: None,
             compilation_options: PipelineCompilationOptions{
                 constants: &[],
-                zero_initialize_workgroup_memory: true // Likely needs returning to
+                zero_initialize_workgroup_memory: false // Likely needs returning to
             }
         });
         // END of COMPUTE //
@@ -282,6 +285,7 @@ impl State {
             push_constant_ranges: &[]
         });
 
+
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor { 
             label: Some("MeowPipeline"), 
             layout: Some(&render_pipeline_layout), 
@@ -323,6 +327,7 @@ impl State {
             cache: None, 
         });
 
+
         Ok (
             Self { 
                 mouse_is_pressed: false,
@@ -337,8 +342,11 @@ impl State {
                 mouse_down: None,
                 camera: camera,
                 uniforms_voxels_storagetexture: Some(uniforms_voxels_storagetexture),
-                render_bind_group: Some(render_bind_group)
-
+                render_bind_group: Some(render_bind_group),
+                voxel_grid_buffer: Some(voxel_grid_buffer),
+                uniform_buffer: Some(uni),
+                compute_bind_group_layout: Some(bind_group_layout),
+                render_bind_group_layout: Some(render_bind_group_layout),
             }
         )
     }
@@ -350,7 +358,72 @@ impl State {
             self.surface.configure(&self.device, &self.surf_config);
             self.is_surface_configured = true;
         }
-    }
+
+        let storage_texture = 
+            self.device.create_texture(&TextureDescriptor{
+            label: Some("Storage Texture"),
+            size: Extent3d {
+                width: width, 
+                height: height,
+                depth_or_array_layers: 1
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: TextureUsages::STORAGE_BINDING,
+            view_formats: &[wgpu::TextureFormat::Rgba8Unorm]
+        });
+        let texture_view = storage_texture.create_view(&TextureViewDescriptor{
+            label: Some("Texture View"),
+            format: Some(wgpu::TextureFormat::Rgba8Unorm),
+            dimension: Some(wgpu::TextureViewDimension::D2),
+            usage: None,
+            aspect: wgpu::TextureAspect::All,
+            base_mip_level: 0,
+            mip_level_count: None,
+            base_array_layer: 0,
+            array_layer_count:None
+        });
+        let bind_group_descriptor = &wgpu::BindGroupDescriptor {
+            label: Some("Bind group descriptor"),
+            layout: self.compute_bind_group_layout.as_ref().unwrap(),
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(BufferBinding { 
+                    buffer: self.uniform_buffer.as_ref().unwrap(), 
+                    offset: 0, 
+                    size: NonZero::new((std::mem::size_of::<Uniforms>()) as u64)
+                }),
+            },
+            BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
+                    buffer:  self.voxel_grid_buffer.as_ref().unwrap(),
+                    offset: 0,
+                    size: NonZero::new((std::mem::size_of::<f32>()*200*200*200) as u64)
+            })
+            },
+            BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::TextureView(&texture_view)
+            }
+            ]
+        };
+
+        // binding 1, assigned to index 0 in render
+        self.uniforms_voxels_storagetexture = Some(self.device.create_bind_group(bind_group_descriptor));
+
+        self.render_bind_group = Some(self.device.create_bind_group(&BindGroupDescriptor{
+            label: Some("Render Bind Group"),
+            layout: self.render_bind_group_layout.as_ref().unwrap(),
+            entries: &[BindGroupEntry{
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&texture_view)
+            }]
+        }));
+
+        }
 
     pub fn handle_key(&self, event_loop: &winit::event_loop::ActiveEventLoop, code: winit::keyboard::KeyCode, is_pressed: bool) {
         match (code, is_pressed) {
@@ -420,7 +493,7 @@ impl State {
 
             render_pass.set_pipeline(self.pipeline.as_ref().unwrap());
             render_pass.set_bind_group(0, Some(self.render_bind_group.as_ref().unwrap()), &[]);
-            render_pass.draw(0..2, 0..1);
+            render_pass.draw(0..3, 0..1);
         } // encoder borrow dropped here
     
         // submit will accept anything that implements IntoIter
@@ -430,6 +503,5 @@ impl State {
         Ok(())
 
     }
-     
 
 }
