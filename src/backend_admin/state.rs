@@ -1,12 +1,16 @@
 use rand_distr::uniform;
 use winit::{dpi::{PhysicalPosition, PhysicalSize}, window::Window};
 use std::{num::NonZero, sync::Arc};
-use crate::world::camera::OrbitalCamera;
+use crate::{world::camera::OrbitalCamera, 
+    backend_admin::gpu::{enums::{Access, 
+                                OffsetBehaviour}, 
+                        builders::{BindGroupLayoutBuilder}}};
 use cgmath::Vector2;
 use anyhow::{Result, Context};
 use wgpu::{naga::StorageAccess, util::DeviceExt, wgt::TextureDescriptor, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutEntry, BufferBinding, BufferBindingType, BufferUsages, ComputePipeline, Extent3d, PipelineCacheDescriptor, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
 use rand::prelude::*;
 use wgpu::TextureUsages;
+
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -140,42 +144,32 @@ impl State {
             array_layer_count:None
         });
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor{
-            label: Some("Bind group layout"),
-            entries: &[BindGroupLayoutEntry{ 
-                binding: 0,
-                visibility: ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: NonZero::new((std::mem::size_of::<Uniforms>()) as u64),
-                },
-                count: None
-                }, BindGroupLayoutEntry{
-                binding: 1,
-                visibility: ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer { 
-                    ty: BufferBindingType::Storage { // voxel grid storage buffer specification
-                    read_only: false }, 
-                    has_dynamic_offset: false, 
-                    min_binding_size: NonZero::new((std::mem::size_of::<f32>()*200*200*200) as u64)},
-                count: None
-                },
-                BindGroupLayoutEntry{
-                    binding: 2,
-                    visibility: ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture { 
-                        access: wgpu::StorageTextureAccess::WriteOnly, 
-                        format: wgpu::TextureFormat::Rgba8Unorm, 
-                        view_dimension: wgpu::TextureViewDimension::D2 },
-                    count: None}
-                    ],
-            
-        });
+        let compute_bind_group_layout = BindGroupLayoutBuilder::new("Compute Bind Group".to_string())
+            .with_uniform_buffer(
+                ShaderStages::COMPUTE, 
+                OffsetBehaviour::Static)
+            .with_storage_buffer(
+                ShaderStages::COMPUTE, 
+                OffsetBehaviour::Static, 
+                Access::ReadWrite)
+            .with_storage_texture(
+                ShaderStages::COMPUTE, 
+                TextureFormat::Rgba8Unorm, 
+                wgpu::StorageTextureAccess::WriteOnly,
+            wgpu::TextureViewDimension::D2)
+            .build(&device);
+
+        let render_bind_group_layout = BindGroupLayoutBuilder::new("Render Bind Group".to_string())
+                .with_storage_texture(
+                    ShaderStages::FRAGMENT, 
+                    TextureFormat::Rgba8Unorm, 
+                    wgpu::StorageTextureAccess::ReadOnly, 
+                    wgpu::TextureViewDimension::D2)
+                .build(&device);
 
         let bind_group_descriptor = &wgpu::BindGroupDescriptor {
             label: Some("Bind group descriptor"),
-            layout: &bind_group_layout,
+            layout: &compute_bind_group_layout,
             entries: &[BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer(BufferBinding { 
@@ -205,7 +199,7 @@ impl State {
         // compute pipeline setup
         let compute_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Compute Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout
+            bind_group_layouts: &[&compute_bind_group_layout
             ],
             push_constant_ranges: &[]
         });
@@ -253,22 +247,6 @@ impl State {
                 source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/vertex.wgsl").into()) 
             });
 
-        
-        let render_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor{
-            label: Some("Render Bind Group Layout"),
-            entries: &[
-                BindGroupLayoutEntry{
-                binding: 0,
-                visibility: ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::StorageTexture { 
-                    access: wgpu::StorageTextureAccess::ReadOnly, 
-                    format: TextureFormat::Rgba8Unorm, 
-                    view_dimension: wgpu::TextureViewDimension::D2 },
-                count: None
-            }
-            ]
-
-        });
 
         let render_bind_group = device.create_bind_group(&BindGroupDescriptor{
             label: Some("Render Bind Group"),
@@ -345,7 +323,7 @@ impl State {
                 render_bind_group: Some(render_bind_group),
                 voxel_grid_buffer: Some(voxel_grid_buffer),
                 uniform_buffer: Some(uni),
-                compute_bind_group_layout: Some(bind_group_layout),
+                compute_bind_group_layout: Some(compute_bind_group_layout),
                 render_bind_group_layout: Some(render_bind_group_layout),
             }
         )
@@ -385,6 +363,7 @@ impl State {
             base_array_layer: 0,
             array_layer_count:None
         });
+        
         let bind_group_descriptor = &wgpu::BindGroupDescriptor {
             label: Some("Bind group descriptor"),
             layout: self.compute_bind_group_layout.as_ref().unwrap(),
