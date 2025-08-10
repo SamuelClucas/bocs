@@ -1,13 +1,11 @@
-use rand_distr::uniform;
 use winit::{dpi::{PhysicalPosition, PhysicalSize}, window::Window};
 use std::{num::NonZero, sync::Arc};
 use crate::{world::camera::OrbitalCamera, 
     backend_admin::gpu::{enums::{Access, 
                                 OffsetBehaviour}, 
                         builders::{BindGroupLayoutBuilder}}};
-use cgmath::Vector2;
-use anyhow::{Result, Context};
-use wgpu::{naga::StorageAccess, util::DeviceExt, wgt::TextureDescriptor, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutEntry, BufferBinding, BufferBindingType, BufferUsages, ComputePipeline, Extent3d, PipelineCacheDescriptor, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
+use anyhow::{Result};
+use wgpu::{util::DeviceExt, wgt::TextureDescriptor, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BufferBinding, BufferUsages, ComputePipeline, Extent3d,  PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureViewDescriptor};
 use rand::prelude::*;
 use wgpu::TextureUsages;
 
@@ -15,13 +13,14 @@ use wgpu::TextureUsages;
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct Uniforms {
-    // 0-2: camera position, 3-5: forward, 6-8: up, 9-11: right, 12: timestep, 13: random seed. Required for projecting world onto camera basis
-    cam_pos: [f32; 4],
-    forward: [f32; 4],
-    up: [f32; 4],
-    right: [f32; 4],
-    timestep: [f32; 4],
-    seed: [f32; 4],
+    /// World -> Camera basis vectors, timestep, and random seed for voxel grid init
+    /// Wgsl expects Vec4<f32> (16 byte alignment
+    cam_pos: [f32; 4], // [2]< padding
+    forward: [f32; 4], // [2]< padding
+    up: [f32; 4], // [2]< padding
+    right: [f32; 4], // [2]< padding
+    timestep: [f32; 4], // only [0]
+    seed: [f32; 4], // only [0]
 
 }
 
@@ -37,7 +36,6 @@ impl Uniforms {
         }
     }
 }
-
 
 pub struct State {
     pub mouse_is_pressed: bool,
@@ -363,7 +361,7 @@ impl State {
             base_array_layer: 0,
             array_layer_count:None
         });
-        
+
         let bind_group_descriptor = &wgpu::BindGroupDescriptor {
             label: Some("Bind group descriptor"),
             layout: self.compute_bind_group_layout.as_ref().unwrap(),
