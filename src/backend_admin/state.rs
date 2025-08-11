@@ -15,6 +15,7 @@ use wgpu::TextureUsages;
 struct Uniforms {
     /// World -> Camera basis vectors, timestep, and random seed for voxel grid init
     /// Wgsl expects Vec4<f32> (16 byte alignment
+    dims: [u32; 4],
     cam_pos: [f32; 4], // [2]< padding
     forward: [f32; 4], // [2]< padding
     up: [f32; 4], // [2]< padding
@@ -29,12 +30,18 @@ impl Uniforms {
         let ptr = self as *const _ as *const u8;
 
         let len = std::mem::size_of::<Uniforms>(); 
-        // Each f32 padded rhs with 12 bytes to 16 byte alignment
+        // Each f32/u32 padded rhs with 12 bytes to 16 byte alignment
         
         unsafe {
             std::slice::from_raw_parts(ptr, len)
         }
     }
+}
+
+struct VoxelDims {
+    i: u32,
+    j: u32,
+    k: u32
 }
 
 pub struct State {
@@ -46,7 +53,8 @@ pub struct State {
     pub is_surface_configured: bool,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    compute_pipeline: Option<ComputePipeline>,
+    init_pipeline: Option<ComputePipeline>,
+    laplacian_pipeline: Option<ComputePipeline>,
     uniforms_voxels_storagetexture: Option<BindGroup>,
     pub camera: OrbitalCamera,
     pipeline: Option<wgpu::RenderPipeline>,
@@ -55,6 +63,9 @@ pub struct State {
     voxel_grid_buffer: Option<wgpu::Buffer>,
     compute_bind_group_layout: Option<BindGroupLayout>,
     render_bind_group_layout: Option<BindGroupLayout>,
+    init_complete: bool,
+    dims: VoxelDims
+    
 
 }
 
@@ -63,6 +74,11 @@ impl State {
         let camera = OrbitalCamera::new(200.0, 0.0, 0.0);
 
         let size = window.inner_size();
+        let dims = VoxelDims {
+            i: 200,
+            j: 200,
+            k: 200
+        };
 
         // Instance == handle to GPU
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -95,13 +111,14 @@ impl State {
         
         let voxel_grid_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Compute store"),
-            size:  (std::mem::size_of::<f32>()* 200 * 200 * 200) as u64,
+            size:  (std::mem::size_of::<f32>() as u32 * dims.i * dims.j * dims.k) as u64,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false // see shader for init
         });
 
         let mut rng = rand::rng();
         let uniforms = Uniforms {
+            dims: [dims.i as u32, dims.j as u32, dims.k as u32, 0],
             cam_pos: [camera.c.x, camera.c.y, camera.c.z, 0.0 as f32],
             forward: [camera.f.x, camera.f.y, camera.f.z, 0.0 as f32],
             up: [camera.u.x, camera.u.y, camera.u.z, 0.0 as f32],
@@ -181,7 +198,7 @@ impl State {
                 resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
                     buffer:  &voxel_grid_buffer,
                     offset: 0,
-                    size: NonZero::new((std::mem::size_of::<f32>()*200*200*200) as u64)
+                    size: NonZero::new((std::mem::size_of::<f32>() as u32 * dims.i * dims.j * dims.k) as u64)
             })
             },
             BindGroupEntry {
@@ -202,17 +219,32 @@ impl State {
             push_constant_ranges: &[]
         });
 
-        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Laplacian"),
+        // Entry Points
+        let init_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Init"),
             layout: Some(&compute_pipeline_layout),
             module: &init,
-            entry_point: Some("main"),
+            entry_point: Some("init"),
             cache: None,
             compilation_options: PipelineCompilationOptions{
                 constants: &[],
                 zero_initialize_workgroup_memory: false // Likely needs returning to
             }
         });
+
+        let laplacian_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Init"),
+            layout: Some(&compute_pipeline_layout),
+            module: &init,
+            entry_point: Some("laplacian"),
+            cache: None,
+            compilation_options: PipelineCompilationOptions{
+                constants: &[],
+                zero_initialize_workgroup_memory: false // Likely needs returning to
+            }
+        });
+
+       
         // END of COMPUTE //
 
         let surface_caps = surface.get_capabilities(&adapter);
@@ -311,7 +343,8 @@ impl State {
                 device,
                 queue,
                 surface,
-                compute_pipeline: Some(compute_pipeline),
+                init_pipeline: Some(init_pipeline),
+                laplacian_pipeline: Some(laplacian_pipeline),
                 pipeline: Some(render_pipeline),
                 surf_config: config,
                 is_surface_configured: false,
@@ -323,6 +356,8 @@ impl State {
                 uniform_buffer: Some(uni),
                 compute_bind_group_layout: Some(compute_bind_group_layout),
                 render_bind_group_layout: Some(render_bind_group_layout),
+                init_complete: false,
+                dims: dims
             }
         )
     }
@@ -431,19 +466,32 @@ impl State {
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Command Encoder")
         });
-
+        if !self.init_complete {
         {
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor{
-                label: Some("Computa"),
+                label: Some("Init"),
                 timestamp_writes: None
                 });
         
 
-            compute_pass.set_pipeline(self.compute_pipeline.as_ref().unwrap());
-            // voxelgrid storage buffer index 0 binding 1
+            compute_pass.set_pipeline(self.init_pipeline.as_ref().unwrap());
             compute_pass.set_bind_group(0, self.uniforms_voxels_storagetexture.as_ref().unwrap(), &[]); 
+            compute_pass.dispatch_workgroups(self.dims.i/8, self.dims.j/4, self.dims.k/8); // group size is 8 * 4 * 8 <= 256 (256, 256, 64 respective limits)
+            self.init_complete = true;
+        }
+        }
+        else {
+            {
+            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor{
+                label: Some("Laplacian"),
+                timestamp_writes: None
+                });
+    
 
-            compute_pass.dispatch_workgroups(200/8, 200/4, 200/8); // group size is 8,8,8 to yield 200*200*200 active threads
+            compute_pass.set_pipeline(self.laplacian_pipeline.as_ref().unwrap());
+            compute_pass.set_bind_group(0, self.uniforms_voxels_storagetexture.as_ref().unwrap(), &[]); 
+            compute_pass.dispatch_workgroups(self.dims.i/8, self.dims.j/4, self.dims.k/8); 
+            }
         }
 
         {

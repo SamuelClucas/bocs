@@ -13,6 +13,3 @@ It achieves this by combining:
     - These form the vocabulary for describing resource and pipeline properties.
 - builders.rs – Builder types (BindGroupLayoutBuilder, PipelineBuilder, etc.) that accept enums, accumulate state, and produce WGPU objects.
 - init.rs – Adapter, device, and surface selection. Surface format/present mode configuration.
-- resources.rs – Creation of world-sized GPU resources (uniform buffers, voxel buffers, samplers).
-- frame_targets.rs – Creation and rebuild of window-sized targets (swapchain, storage texture) and their bind groups.
-- shaders.rs – WGSL module loading utilities.
