@@ -60,7 +60,8 @@ pub struct State {
     pipeline: Option<wgpu::RenderPipeline>,
     render_bind_group: Option<BindGroup>,
     uniform_buffer: Option<wgpu::Buffer>,
-    voxel_grid_buffer: Option<wgpu::Buffer>,
+    voxel_grid_buffer_a: Option<wgpu::Buffer>,
+    voxel_grid_buffer_b: Option<wgpu::Buffer>,
     compute_bind_group_layout: Option<BindGroupLayout>,
     render_bind_group_layout: Option<BindGroupLayout>,
     init_complete: bool,
@@ -109,8 +110,15 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/init.wgsl").into())
         });
         
-        let voxel_grid_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Compute store"),
+        let voxel_grid_buffer_a = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Compute store a"),
+            size:  (std::mem::size_of::<f32>() as u32 * dims.i * dims.j * dims.k) as u64,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false // see shader for init
+        });
+
+        let voxel_grid_buffer_b = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Compute store b"),
             size:  (std::mem::size_of::<f32>() as u32 * dims.i * dims.j * dims.k) as u64,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false // see shader for init
@@ -167,6 +175,10 @@ impl State {
                 ShaderStages::COMPUTE, 
                 OffsetBehaviour::Static, 
                 Access::ReadWrite)
+            .with_storage_buffer(
+                ShaderStages::COMPUTE,
+                OffsetBehaviour::Static,
+                Access::ReadWrite)
             .with_storage_texture(
                 ShaderStages::COMPUTE, 
                 TextureFormat::Rgba8Unorm, 
@@ -196,13 +208,21 @@ impl State {
             BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
-                    buffer:  &voxel_grid_buffer,
+                    buffer:  &voxel_grid_buffer_a,
                     offset: 0,
                     size: NonZero::new((std::mem::size_of::<f32>() as u32 * dims.i * dims.j * dims.k) as u64)
             })
             },
             BindGroupEntry {
                 binding: 2,
+                resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
+                    buffer:  &voxel_grid_buffer_b,
+                    offset: 0,
+                    size: NonZero::new((std::mem::size_of::<f32>() as u32 * dims.i * dims.j * dims.k) as u64)
+            })
+            },
+            BindGroupEntry {
+                binding: 3,
                 resource: wgpu::BindingResource::TextureView(&texture_view)
             }
             ]
@@ -233,7 +253,7 @@ impl State {
         });
 
         let laplacian_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Init"),
+            label: Some("Laplacian"),
             layout: Some(&compute_pipeline_layout),
             module: &init,
             entry_point: Some("laplacian"),
@@ -352,7 +372,8 @@ impl State {
                 camera: camera,
                 uniforms_voxels_storagetexture: Some(uniforms_voxels_storagetexture),
                 render_bind_group: Some(render_bind_group),
-                voxel_grid_buffer: Some(voxel_grid_buffer),
+                voxel_grid_buffer_a: Some(voxel_grid_buffer_a),
+                voxel_grid_buffer_b: Some(voxel_grid_buffer_b),
                 uniform_buffer: Some(uni),
                 compute_bind_group_layout: Some(compute_bind_group_layout),
                 render_bind_group_layout: Some(render_bind_group_layout),
@@ -411,13 +432,21 @@ impl State {
             BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
-                    buffer:  self.voxel_grid_buffer.as_ref().unwrap(),
+                    buffer:  self.voxel_grid_buffer_a.as_ref().unwrap(),
                     offset: 0,
-                    size: NonZero::new((std::mem::size_of::<f32>()*200*200*200) as u64)
+                    size: NonZero::new((std::mem::size_of::<f32>() as u32 * self.dims.i * self.dims.j * self.dims.k) as u64)
             })
             },
             BindGroupEntry {
                 binding: 2,
+                resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
+                    buffer:  self.voxel_grid_buffer_b.as_ref().unwrap(),
+                    offset: 0,
+                    size: NonZero::new((std::mem::size_of::<f32>() as u32 * self.dims.i * self.dims.j * self.dims.k) as u64)
+            })
+            },
+            BindGroupEntry {
+                binding: 3,
                 resource: wgpu::BindingResource::TextureView(&texture_view)
             }
             ]
