@@ -15,7 +15,7 @@ use wgpu::TextureUsages;
 struct Uniforms {
     /// World -> Camera basis vectors, timestep, and random seed for voxel grid init
     /// Wgsl expects Vec4<f32> (16 byte alignment
-    dims: [u32; 4],
+    dims: [u32; 4], // i, j, k, ij plane stride for k
     cam_pos: [f32; 4], // [2]< padding
     forward: [f32; 4], // [2]< padding
     up: [f32; 4], // [2]< padding
@@ -126,7 +126,7 @@ impl State {
 
         let mut rng = rand::rng();
         let uniforms = Uniforms {
-            dims: [dims.i as u32, dims.j as u32, dims.k as u32, 0],
+            dims: [dims.i as u32, dims.j as u32, dims.k as u32, (dims.i * dims.j) as u32],
             cam_pos: [camera.c.x, camera.c.y, camera.c.z, 0.0 as f32],
             forward: [camera.f.x, camera.f.y, camera.f.z, 0.0 as f32],
             up: [camera.u.x, camera.u.y, camera.u.z, 0.0 as f32],
