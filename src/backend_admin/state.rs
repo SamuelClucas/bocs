@@ -65,7 +65,10 @@ pub struct State {
     compute_bind_group_layout: Option<BindGroupLayout>,
     render_bind_group_layout: Option<BindGroupLayout>,
     init_complete: bool,
-    dims: VoxelDims
+    dims: VoxelDims,
+    i_ceil: u32,
+    j_ceil: u32,
+    k_ceil: u32 
     
 
 }
@@ -80,6 +83,21 @@ impl State {
             j: 200,
             k: 200
         };
+
+        let i_ceil = if dims.i % 8 == 0 {
+            0
+        }
+        else { 1};
+
+        let j_ceil = if dims.j % 4 == 0 {
+            0
+        }
+        else { 1 };
+
+        let k_ceil = if dims.k % 8 == 0 {
+            0
+        }
+        else { 1};
 
         // Instance == handle to GPU
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -358,6 +376,9 @@ impl State {
 
         Ok (
             Self { 
+                i_ceil: i_ceil,
+                j_ceil: j_ceil,
+                k_ceil: k_ceil,
                 mouse_is_pressed: false,
                 window, 
                 device,
@@ -502,10 +523,11 @@ impl State {
                 timestamp_writes: None
                 });
         
+                
 
             compute_pass.set_pipeline(self.init_pipeline.as_ref().unwrap());
             compute_pass.set_bind_group(0, self.uniforms_voxels_storagetexture.as_ref().unwrap(), &[]); 
-            compute_pass.dispatch_workgroups(self.dims.i/8, self.dims.j/4, self.dims.k/8); // group size is 8 * 4 * 8 <= 256 (256, 256, 64 respective limits)
+            compute_pass.dispatch_workgroups((self.dims.i/8) + self.i_ceil, (self.dims.j/4) + self.j_ceil, (self.dims.k/8) + self.k_ceil);  // group size is 8 * 4 * 8 <= 256 (256, 256, 64 respective limits)
             self.init_complete = true;
         }
         }
@@ -519,7 +541,8 @@ impl State {
 
             compute_pass.set_pipeline(self.laplacian_pipeline.as_ref().unwrap());
             compute_pass.set_bind_group(0, self.uniforms_voxels_storagetexture.as_ref().unwrap(), &[]); 
-            compute_pass.dispatch_workgroups(self.dims.i/8, self.dims.j/4, self.dims.k/8); 
+            
+            compute_pass.dispatch_workgroups((self.dims.i/8) + self.i_ceil, (self.dims.j/4) + self.j_ceil, (self.dims.k/8) + self.k_ceil); 
             }
         }
 
