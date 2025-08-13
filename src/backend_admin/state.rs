@@ -20,8 +20,9 @@ struct Uniforms {
     forward: [f32; 4], // [2]< padding
     up: [f32; 4], // [2]< padding
     right: [f32; 4], // [2]< padding
-    timestep_reada: [f32; 4], // only [0]
+    timestep: [f32; 4], // only [0]
     seed: [f32; 4], // only [0]
+    flags: [u32; 4]
 
 }
 
@@ -153,8 +154,9 @@ impl State {
             forward: [camera.f.x, camera.f.y, camera.f.z, 0.0 as f32],
             up: [camera.u.x, camera.u.y, camera.u.z, 0.0 as f32],
             right: [camera.r.x, camera.r.y, camera.r.z, 0.0 as f32],
-            timestep_reada: [0.0 as f32, 1.0 as f32, 0.0 as f32, 0.0 as f32],
-            seed: [rng.random::<f32>(), 0.0 as f32, 0.0 as f32, 0.0 as f32]
+            timestep: [0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32],
+            seed: [rng.random::<f32>(), 0.0 as f32, 0.0 as f32, 0.0 as f32],
+            flags: [1, 0, 0, 0]
         };
         
         let uni = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -531,18 +533,21 @@ impl State {
         let duration = (now - self.time).as_secs_f32();
         self.time = now;
 
+        self.read_a = if self.init_complete{ !self.read_a}
+        else { self.read_a};
+
         let uniforms = Uniforms {
             dims: [self.dims.i as u32, self.dims.j as u32, self.dims.k as u32, (self.dims.i * self.dims.j) as u32],
             cam_pos: [self.camera.c.x, self.camera.c.y, self.camera.c.z, 0.0 as f32],
             forward: [self.camera.f.x, self.camera.f.y, self.camera.f.z, 0.0 as f32],
             up: [self.camera.u.x, self.camera.u.y, self.camera.u.z, 0.0 as f32],
             right: [self.camera.r.x, self.camera.r.y, self.camera.r.z, 0.0 as f32],
-            timestep_reada: [duration, self.read_a as i32 as f32, 0.0 as f32, 0.0 as f32],
-            seed: [0.0, 0.0 as f32, 0.0 as f32, 0.0 as f32] // could later reintroduce seed here for hot sim resizing 
+            timestep: [duration, 0.0 as f32, 0.0 as f32, 0.0 as f32],
+            seed: [0.0, 0.0 as f32, 0.0 as f32, 0.0 as f32], // could later reintroduce seed here for hot sim resizing 
+            flags: [self.read_a as u32, 0, 0, 0]
         };
         let uniforms = uniforms.flatten_u8();
         self.queue.write_buffer(self.uniform_buffer.as_ref().unwrap(), 0, uniforms);
-        self.read_a = !self.read_a;
 
         // UPDATE TIMESTEP COMPLETE //
 
