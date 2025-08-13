@@ -530,11 +530,12 @@ impl State {
 
         // UPDATE TIMESTEP //
         let now = std::time::Instant::now();
-        let duration = (now - self.time).as_secs_f32();
+        let duration = ((now - self.time).as_secs_f32()).min(0.1666666); // stability bound for 3D euler integration
         self.time = now;
 
         self.read_a = if self.init_complete{ !self.read_a}
         else { self.read_a};
+
 
         let uniforms = Uniforms {
             dims: [self.dims.i as u32, self.dims.j as u32, self.dims.k as u32, (self.dims.i * self.dims.j) as u32],
