@@ -5,7 +5,7 @@ use crate::{world::camera::OrbitalCamera,
                                 OffsetBehaviour}, 
                         builders::{BindGroupLayoutBuilder}}};
 use anyhow::{Result};
-use wgpu::{util::DeviceExt, wgt::TextureDescriptor, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BufferBinding, BufferUsages, ComputePipeline, Extent3d,  PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureViewDescriptor};
+use wgpu::{util::DeviceExt, wgt::TextureDescriptor, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BufferBinding, BufferUsages, ComputePipeline, Extent3d, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
 use rand::prelude::*;
 use wgpu::TextureUsages;
 
@@ -20,7 +20,7 @@ struct Uniforms {
     forward: [f32; 4], // [2]< padding
     up: [f32; 4], // [2]< padding
     right: [f32; 4], // [2]< padding
-    timestep: [f32; 4], // only [0]
+    timestep_reada: [f32; 4], // only [0]
     seed: [f32; 4], // only [0]
 
 }
@@ -68,7 +68,11 @@ pub struct State {
     dims: VoxelDims,
     i_ceil: u32,
     j_ceil: u32,
-    k_ceil: u32 
+    k_ceil: u32,
+    time: std::time::Instant,
+    rng: ThreadRng,
+    texture_view: TextureView,
+    read_a: bool
     
 
 }
@@ -149,9 +153,10 @@ impl State {
             forward: [camera.f.x, camera.f.y, camera.f.z, 0.0 as f32],
             up: [camera.u.x, camera.u.y, camera.u.z, 0.0 as f32],
             right: [camera.r.x, camera.r.y, camera.r.z, 0.0 as f32],
-            timestep: [0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32],
+            timestep_reada: [0.0 as f32, 1.0 as f32, 0.0 as f32, 0.0 as f32],
             seed: [rng.random::<f32>(), 0.0 as f32, 0.0 as f32, 0.0 as f32]
         };
+        
         let uni = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform buffer"),
             contents: uniforms.flatten_u8(),
@@ -196,7 +201,7 @@ impl State {
             .with_storage_buffer(
                 ShaderStages::COMPUTE,
                 OffsetBehaviour::Static,
-                Access::ReadWrite)
+                Access::ReadWrite)// no need to alternate read/write only on buffers a and b
             .with_storage_texture(
                 ShaderStages::COMPUTE, 
                 TextureFormat::Rgba8Unorm, 
@@ -266,7 +271,7 @@ impl State {
             cache: None,
             compilation_options: PipelineCompilationOptions{
                 constants: &[],
-                zero_initialize_workgroup_memory: false // Likely needs returning to
+                zero_initialize_workgroup_memory: false 
             }
         });
 
@@ -278,7 +283,7 @@ impl State {
             cache: None,
             compilation_options: PipelineCompilationOptions{
                 constants: &[],
-                zero_initialize_workgroup_memory: false // Likely needs returning to
+                zero_initialize_workgroup_memory: false 
             }
         });
 
@@ -399,7 +404,11 @@ impl State {
                 compute_bind_group_layout: Some(compute_bind_group_layout),
                 render_bind_group_layout: Some(render_bind_group_layout),
                 init_complete: false,
-                dims: dims
+                dims: dims,
+                time: std::time::Instant::now(),
+                rng: rng,
+                texture_view: texture_view,
+                read_a: true
             }
         )
     }
@@ -427,7 +436,7 @@ impl State {
             usage: TextureUsages::STORAGE_BINDING,
             view_formats: &[wgpu::TextureFormat::Rgba8Unorm]
         });
-        let texture_view = storage_texture.create_view(&TextureViewDescriptor{
+        self.texture_view = storage_texture.create_view(&TextureViewDescriptor{
             label: Some("Texture View"),
             format: Some(wgpu::TextureFormat::Rgba8Unorm),
             dimension: Some(wgpu::TextureViewDimension::D2),
@@ -468,7 +477,7 @@ impl State {
             },
             BindGroupEntry {
                 binding: 3,
-                resource: wgpu::BindingResource::TextureView(&texture_view)
+                resource: wgpu::BindingResource::TextureView(&self.texture_view)
             }
             ]
         };
@@ -481,7 +490,7 @@ impl State {
             layout: self.render_bind_group_layout.as_ref().unwrap(),
             entries: &[BindGroupEntry{
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(&texture_view)
+                resource: wgpu::BindingResource::TextureView(&self.texture_view)
             }]
         }));
 
@@ -516,14 +525,35 @@ impl State {
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Command Encoder")
         });
+
+        // UPDATE TIMESTEP //
+        let now = std::time::Instant::now();
+        let duration = (now - self.time).as_secs_f32();
+        self.time = now;
+
+        let uniforms = Uniforms {
+            dims: [self.dims.i as u32, self.dims.j as u32, self.dims.k as u32, (self.dims.i * self.dims.j) as u32],
+            cam_pos: [self.camera.c.x, self.camera.c.y, self.camera.c.z, 0.0 as f32],
+            forward: [self.camera.f.x, self.camera.f.y, self.camera.f.z, 0.0 as f32],
+            up: [self.camera.u.x, self.camera.u.y, self.camera.u.z, 0.0 as f32],
+            right: [self.camera.r.x, self.camera.r.y, self.camera.r.z, 0.0 as f32],
+            timestep_reada: [duration, self.read_a as i32 as f32, 0.0 as f32, 0.0 as f32],
+            seed: [0.0, 0.0 as f32, 0.0 as f32, 0.0 as f32] // could later reintroduce seed here for hot sim resizing 
+        };
+        let uniforms = uniforms.flatten_u8();
+        self.queue.write_buffer(self.uniform_buffer.as_ref().unwrap(), 0, uniforms);
+        self.read_a = !self.read_a;
+
+        // UPDATE TIMESTEP COMPLETE //
+
         if !self.init_complete {
-        {
+        {   
+
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor{
                 label: Some("Init"),
                 timestamp_writes: None
                 });
-        
-                
+    
 
             compute_pass.set_pipeline(self.init_pipeline.as_ref().unwrap());
             compute_pass.set_bind_group(0, self.uniforms_voxels_storagetexture.as_ref().unwrap(), &[]); 
