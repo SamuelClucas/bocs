@@ -18,6 +18,7 @@ struct Uniforms {
     dims: [u32; 4], // i, j, k, ij plane stride for k
     cam_pos: [f32; 4], // [2]< padding
     forward: [f32; 4], // [2]< padding
+    centre: [f32; 4],
     up: [f32; 4], // [2]< padding
     right: [f32; 4], // [2]< padding
     timestep: [f32; 4], // only [0]
@@ -42,8 +43,33 @@ impl Uniforms {
 struct VoxelDims {
     i: u32,
     j: u32,
-    k: u32
+    k: u32,
 }
+
+struct VoxelVertices {
+    vertices: Vec<[f32; 3]>
+
+}
+
+impl VoxelVertices {
+    pub fn  centre_at_origin(mut self, dims: &VoxelDims) -> Self{
+        let i = (dims.i as f32) / 2.0;
+        let j = (dims.j as f32) / 2.0;
+        let k = (dims.k as f32) / 2.0;
+
+        // rh coordinates looking down k,-ijk first (i major, k minor), bottom left, counterclockwise
+        self.vertices.push([-i, -j, -k]);
+        self.vertices.push([-i, j, -k]);
+        self.vertices.push([i, j, -k]);
+        self.vertices.push([i, -j, -k]); // face in -k ij plane 
+
+        self.vertices.push([-i, -j, k]);
+        self.vertices.push([-i, j, k]);
+        self.vertices.push([i, j, k]);
+        self.vertices.push([i, -j, k]); // face in k ij plane
+        self
+    }
+}   
 
 pub struct State {
     pub mouse_is_pressed: bool,
@@ -54,8 +80,11 @@ pub struct State {
     pub is_surface_configured: bool,
     device: wgpu::Device,
     queue: wgpu::Queue,
+
     init_pipeline: Option<ComputePipeline>,
     laplacian_pipeline: Option<ComputePipeline>,
+    raymarch_pipeline: ComputePipeline,
+
     uniforms_voxels_storagetexture: Option<BindGroup>,
     pub camera: OrbitalCamera,
     pipeline: Option<wgpu::RenderPipeline>,
@@ -71,23 +100,26 @@ pub struct State {
     j_ceil: u32,
     k_ceil: u32,
     time: std::time::Instant,
-    rng: ThreadRng,
+    rng: ThreadRng, // Save for field hot reinit of voxel grid
     texture_view: TextureView,
-    read_a: bool
-    
+    read_a: bool,
+    world_vertices: VoxelVertices,
+    camera_vertices: VoxelVertices
 
 }
 
 impl State {
     pub async fn new(window: Arc<Window>) -> Result<Self> {
-        let camera = OrbitalCamera::new(200.0, 0.0, 0.0);
-
         let size = window.inner_size();
+        let camera = OrbitalCamera::new(200.0, 0.0, 0.0, &size);
+
         let dims = VoxelDims {
             i: 200,
             j: 200,
             k: 200
         };
+
+        let world_vertices = VoxelVertices{vertices: Vec::new()}.centre_at_origin(&dims);
 
         let i_ceil = if dims.i % 8 == 0 {
             0
@@ -145,15 +177,17 @@ impl State {
             size:  (std::mem::size_of::<f32>() as u32 * dims.i * dims.j * dims.k) as u64,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false // see shader for init
-        });
-
+        }); 
+        
+        
         let mut rng = rand::rng();
         let uniforms = Uniforms {
             dims: [dims.i as u32, dims.j as u32, dims.k as u32, (dims.i * dims.j) as u32],
-            cam_pos: [camera.c.x, camera.c.y, camera.c.z, 0.0 as f32],
-            forward: [camera.f.x, camera.f.y, camera.f.z, 0.0 as f32],
-            up: [camera.u.x, camera.u.y, camera.u.z, 0.0 as f32],
-            right: [camera.r.x, camera.r.y, camera.r.z, 0.0 as f32],
+            cam_pos: [camera.c[0], camera.c[1], camera.c[2], 0.0 as f32],
+            forward: [camera.f[0], camera.f[1], camera.f[2], 0.0 as f32],
+            centre: [camera.centre[0], camera.centre[1], camera.centre[2], 0.0 as f32],
+            up: [camera.u[0], camera.u[1], camera.u[2], 0.0 as f32],
+            right: [camera.r[0], camera.r[1], camera.r[2], 0.0 as f32],
             timestep: [0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32],
             seed: [rng.random::<f32>(), 0.0 as f32, 0.0 as f32, 0.0 as f32],
             flags: [1, 0, 0, 0]
@@ -289,6 +323,18 @@ impl State {
             }
         });
 
+        let raymarch_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Raymarch"),
+            layout: Some(&compute_pipeline_layout),
+            module: &init,
+            entry_point: Some("raymarch"),
+            cache: None,
+            compilation_options: PipelineCompilationOptions{
+                constants: &[],
+                zero_initialize_workgroup_memory: false 
+            }
+        });
+
        
         // END of COMPUTE //
 
@@ -410,7 +456,11 @@ impl State {
                 time: std::time::Instant::now(),
                 rng: rng,
                 texture_view: texture_view,
-                read_a: true
+                read_a: true,
+                raymarch_pipeline: raymarch_pipeline,
+                world_vertices: world_vertices,
+                camera_vertices: VoxelVertices{ vertices: Vec::new() }
+
             }
         )
     }
@@ -419,6 +469,7 @@ impl State {
         if width > 0 && height > 0 {
             self.surf_config.width = width;
             self.surf_config.height = height;
+            self.camera.update(None, None, None, Some(&PhysicalSize {width, height}));
             self.surface.configure(&self.device, &self.surf_config);
             self.is_surface_configured = true;
         }
@@ -484,7 +535,6 @@ impl State {
             ]
         };
 
-        // binding 1, assigned to index 0 in render
         self.uniforms_voxels_storagetexture = Some(self.device.create_bind_group(bind_group_descriptor));
 
         self.render_bind_group = Some(self.device.create_bind_group(&BindGroupDescriptor{
@@ -517,7 +567,13 @@ impl State {
             let _ = self.window.request_inner_size(size);
         }
         else {println!("No size passed to render\n") }
-                   
+
+        // Fresh compute voxel grid coords from world -> camera
+        self.camera_vertices.vertices.clear();
+        for i in self.world_vertices.vertices.iter() {
+            self.camera_vertices.vertices.push(self.camera.world_to_ruf(i));
+        }
+
         // this owns the texture, wrapping it with some extra swapchain-related info
         let output = self.surface.get_current_texture()?;
         // this defines how the texture is interpreted (sampled) to produce the actual pixel outputs to the surface
@@ -536,13 +592,13 @@ impl State {
         self.read_a = if self.init_complete{ !self.read_a}
         else { self.read_a};
 
-
         let uniforms = Uniforms {
             dims: [self.dims.i as u32, self.dims.j as u32, self.dims.k as u32, (self.dims.i * self.dims.j) as u32],
-            cam_pos: [self.camera.c.x, self.camera.c.y, self.camera.c.z, 0.0 as f32],
-            forward: [self.camera.f.x, self.camera.f.y, self.camera.f.z, 0.0 as f32],
-            up: [self.camera.u.x, self.camera.u.y, self.camera.u.z, 0.0 as f32],
-            right: [self.camera.r.x, self.camera.r.y, self.camera.r.z, 0.0 as f32],
+            cam_pos: [self.camera.c[0], self.camera.c[1], self.camera.c[2], 0.0 as f32],
+            forward: [self.camera.f[0], self.camera.f[1], self.camera.f[2], 0.0 as f32],
+            centre: [self.camera.centre[0], self.camera.centre[1], self.camera.centre[2], 0.0 as f32],
+            up: [self.camera.u[0], self.camera.u[1], self.camera.u[2], 0.0 as f32],
+            right: [self.camera.r[0], self.camera.r[1], self.camera.r[2], 0.0 as f32],
             timestep: [duration, 0.0 as f32, 0.0 as f32, 0.0 as f32],
             seed: [0.0, 0.0 as f32, 0.0 as f32, 0.0 as f32], // could later reintroduce seed here for hot sim resizing 
             flags: [self.read_a as u32, 0, 0, 0]
@@ -554,7 +610,6 @@ impl State {
 
         if !self.init_complete {
         {   
-
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor{
                 label: Some("Init"),
                 timestamp_writes: None

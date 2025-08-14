@@ -72,9 +72,10 @@ impl ApplicationHandler<State> for App {
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, mut event: State) {
 
+
             event.resize(
                 event.window.inner_size().width,
-                event.window.inner_size().height
+                event.window.inner_size().height,
             );
 
             self.state = Some(event);
@@ -110,7 +111,7 @@ impl ApplicationHandler<State> for App {
                                 y: position.y - mouse_down.y
                             };
                             // handle cursor move here
-                            state.camera.update(Some(delta.x as f32), Some(delta.y as f32), None);
+                            state.camera.update(Some(delta.x as f32), Some(delta.y as f32), None, None);
                             state.mouse_down = Some(position);
                         }
                         else {
@@ -124,10 +125,10 @@ impl ApplicationHandler<State> for App {
                 if let Some(state) = self.state.as_mut() {
                     match delta {
                         MouseScrollDelta::PixelDelta(pos) => {
-                            state.camera.update(None, None, Some(pos.y as f32));
+                            state.camera.update(None, None, Some(pos.y as f32), None);
                         },
                         MouseScrollDelta::LineDelta(x, y) => {
-                            state.camera.update(None, None, Some(y as f32));
+                            state.camera.update(None, None, Some(y as f32), None);
                         }
                     }
                 }
@@ -152,7 +153,7 @@ impl ApplicationHandler<State> for App {
                         state.is_surface_configured = false;
                         state.window.request_redraw();
                     }
-                    else {
+                    else { // catches all width adjustments
                         self.size = Some(PhysicalSize::new(size.width, (size.width as f32 / ar) as u32));
                         state.is_surface_configured = false;
                         state.window.request_redraw();
@@ -161,7 +162,7 @@ impl ApplicationHandler<State> for App {
                 else { println!("No aspect ratio in resized yet\n"); }
             },       
             WindowEvent::RedrawRequested => {
-                match state.render(self.size) {
+                match state.render(self.size ) {
                     Ok(_) => {},
                     Err(e) => {
                         println!("Unable to render {}", e);
