@@ -567,12 +567,24 @@ impl State {
             let _ = self.window.request_inner_size(size);
         }
         else {println!("No size passed to render\n") }
-
+        let size = self.window.inner_size();
         // Fresh compute voxel grid coords from world -> camera
         self.camera_vertices.vertices.clear();
         for i in self.world_vertices.vertices.iter() {
             self.camera_vertices.vertices.push(self.camera.world_to_ruf(i));
         }
+        let plane_centre = self.camera.world_to_ruf(&self.camera.centre); // express near plane centre in terms of r u f
+        let vertical_distance = size.height as f32 / 2.0; // same magnitude as plane_centre
+        let horizontal_distance = size.width as f32 / 2.0;
+
+        let left_edge = OrbitalCamera::add(plane_centre.clone(), OrbitalCamera::scale(OrbitalCamera::negate(self.camera.r.clone()), horizontal_distance));
+        let right_edge = OrbitalCamera::add(plane_centre.clone(), OrbitalCamera::scale(self.camera.r.clone(), horizontal_distance));
+
+        let top_left_corner = OrbitalCamera::add(left_edge.clone(), OrbitalCamera::scale(self.camera.u.clone(), vertical_distance));
+        let bottom_left_corner = OrbitalCamera::add(left_edge.clone(), OrbitalCamera::scale(self.camera.u.clone(), - vertical_distance));
+
+        let top_right_corner = OrbitalCamera::add(right_edge.clone(), OrbitalCamera::scale(self.camera.u.clone(), vertical_distance));
+        let bottom_right_corner = OrbitalCamera::add(right_edge.clone(), OrbitalCamera::scale(self.camera.u.clone(), - vertical_distance));
 
         // this owns the texture, wrapping it with some extra swapchain-related info
         let output = self.surface.get_current_texture()?;
