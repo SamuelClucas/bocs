@@ -545,10 +545,11 @@ impl State {
             let right_scale = size.width as f32 / 2.0 / centre_top_d; // garantees FOV 90 in vertical
             let centre_right_d = centre_top_d * right_scale;
 
-            let mut max_r = centre_right_d;
-            let mut max_u = centre_top_d;
-            let mut min_r = - centre_right_d;
-            let mut min_u = - centre_top_d;
+            let mut max_r = f32::NEG_INFINITY;
+            let mut max_u = f32::NEG_INFINITY;
+            let mut min_r = f32::INFINITY;
+            let mut min_u = f32::INFINITY;
+
             for i in 0..8 {
                 // VOXEL VERTICES INTO RUF
                 match self.voxelgrid_vertices.get_point(i, SystemGet::WORLD) {
@@ -576,7 +577,10 @@ impl State {
                     _ => { println!("Couldn't get voxelgrid PLANE vertex.\n"); }
                 }
             }
-            [min_r, min_u, max_r, max_u]
+            [min_r.max(-centre_right_d), 
+            min_u.max(- centre_top_d), 
+            max_r.min(centre_right_d), 
+            max_u.min(centre_top_d)]
         };
 
         
