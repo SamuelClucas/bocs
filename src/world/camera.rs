@@ -1,5 +1,4 @@
 use winit::dpi::PhysicalSize;
-use approx::abs_diff_eq;
 
 pub struct OrbitalCamera {
     pub c: [f32;3], // where c is camera pos in world space, 
@@ -29,7 +28,7 @@ impl OrbitalCamera {
         square.sqrt()
     }
     // this is moving to the compute shader
-    pub fn world_to_ruf(&self, input: &[f32;3]) -> [f32;3] { // right is x, up is y, forward is z
+    pub fn world_to_ruf(&self, input: &[f32;3]) -> [f32; 3] { // right is x, up is y, forward is z
         let offset = [input[0]-self.c[0], input[1]-self.c[1], input[2]-self.c[2]];
         [
                 Self::dot(&offset, &self.r), // right
@@ -37,6 +36,20 @@ impl OrbitalCamera {
                 Self::dot(&offset, &self.f) // forward
         ]
     }
+    pub fn ruf_to_ru_plane(&self, input: &[f32; 3], r_scale: &f32) -> [f32; 2] {
+        let normalised = OrbitalCamera::normalise(input.clone(), OrbitalCamera::magnitude(input));
+        let centre_mag = OrbitalCamera::magnitude(&self.centre); // scale factor for F and U
+
+        let up_multiplier = centre_mag/normalised[2];
+
+        // for 90 eg vertical fov, F and U are 1:1
+        // scale u by f coefficient to centre
+        let up_pixels = normalised[1] * up_multiplier; 
+        let right_pixels =  normalised[0] * up_multiplier * r_scale;
+
+        [ right_pixels, up_pixels ]
+    }
+
     pub fn normalise(mut a: [f32; 3], mag: f32) -> [f32; 3]{
         a[0] /= mag;
         a[1] /= mag;

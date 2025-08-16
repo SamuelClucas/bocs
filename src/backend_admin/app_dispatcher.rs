@@ -163,7 +163,7 @@ impl ApplicationHandler<State> for App {
             },       
             WindowEvent::RedrawRequested => {
                 match state.render(self.size ) {
-                    Ok(_) => {},
+                    Ok(_) => {state.window.request_redraw()},
                     Err(e) => {
                         println!("Unable to render {}", e);
                     }

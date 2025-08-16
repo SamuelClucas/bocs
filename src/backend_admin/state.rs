@@ -1,11 +1,12 @@
 use winit::{dpi::{PhysicalPosition, PhysicalSize}, window::Window};
+use core::f32;
 use std::{num::NonZero, sync::Arc};
-use crate::{world::camera::OrbitalCamera, 
+use crate::{world::{camera::OrbitalCamera, voxel_grid::*}, 
     backend_admin::gpu::{enums::{Access, 
                                 OffsetBehaviour}, 
                         builders::{BindGroupLayoutBuilder}}};
 use anyhow::{Result};
-use wgpu::{util::DeviceExt, wgt::TextureDescriptor, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BufferBinding, BufferUsages, ComputePipeline, Extent3d, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
+use wgpu::{util::DeviceExt, wgt::TextureDescriptor, BindGroup, BindGroupEntry, BindGroupLayout, BufferBinding, BufferUsages, ComputePipeline, Extent3d, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
 use rand::prelude::*;
 use wgpu::TextureUsages;
 
@@ -40,36 +41,6 @@ impl Uniforms {
     }
 }
 
-struct VoxelDims {
-    i: u32,
-    j: u32,
-    k: u32,
-}
-
-struct VoxelVertices {
-    vertices: Vec<[f32; 3]>
-
-}
-
-impl VoxelVertices {
-    pub fn  centre_at_origin(mut self, dims: &VoxelDims) -> Self{
-        let i = (dims.i as f32) / 2.0;
-        let j = (dims.j as f32) / 2.0;
-        let k = (dims.k as f32) / 2.0;
-
-        // rh coordinates looking down k,-ijk first (i major, k minor), bottom left, counterclockwise
-        self.vertices.push([-i, -j, -k]);
-        self.vertices.push([-i, j, -k]);
-        self.vertices.push([i, j, -k]);
-        self.vertices.push([i, -j, -k]); // face in -k ij plane 
-
-        self.vertices.push([-i, -j, k]);
-        self.vertices.push([-i, j, k]);
-        self.vertices.push([i, j, k]);
-        self.vertices.push([i, -j, k]); // face in k ij plane
-        self
-    }
-}   
 
 pub struct State {
     pub mouse_is_pressed: bool,
@@ -83,12 +54,12 @@ pub struct State {
 
     init_pipeline: Option<ComputePipeline>,
     laplacian_pipeline: Option<ComputePipeline>,
-    raymarch_pipeline: ComputePipeline,
+    //raymarch_pipeline: ComputePipeline,
 
     uniforms_voxels_storagetexture: Option<BindGroup>,
     pub camera: OrbitalCamera,
-    pipeline: Option<wgpu::RenderPipeline>,
-    render_bind_group: Option<BindGroup>,
+    //pipeline: Option<wgpu::RenderPipeline>,
+   // render_bind_group: Option<BindGroup>,
     uniform_buffer: Option<wgpu::Buffer>,
     voxel_grid_buffer_a: Option<wgpu::Buffer>,
     voxel_grid_buffer_b: Option<wgpu::Buffer>,
@@ -103,9 +74,7 @@ pub struct State {
     rng: ThreadRng, // Save for field hot reinit of voxel grid
     texture_view: TextureView,
     read_a: bool,
-    world_vertices: VoxelVertices,
-    camera_vertices: VoxelVertices
-
+    voxelgrid_vertices: VoxelVertices,
 }
 
 impl State {
@@ -119,7 +88,7 @@ impl State {
             k: 200
         };
 
-        let world_vertices = VoxelVertices{vertices: Vec::new()}.centre_at_origin(&dims);
+        let voxelgrid_vertices = VoxelVertices::centre_at_origin(&dims);
 
         let i_ceil = if dims.i % 8 == 0 {
             0
@@ -322,7 +291,7 @@ impl State {
                 zero_initialize_workgroup_memory: false 
             }
         });
-
+        /* 
         let raymarch_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Raymarch"),
             layout: Some(&compute_pipeline_layout),
@@ -334,7 +303,7 @@ impl State {
                 zero_initialize_workgroup_memory: false 
             }
         });
-
+        */
        
         // END of COMPUTE //
 
@@ -355,7 +324,7 @@ impl State {
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
-
+        /* 
         // TEXTURES //
         let fragment = device.create_shader_module(ShaderModuleDescriptor{
             label: Some("Fragment shader module"),
@@ -367,7 +336,7 @@ impl State {
                 label: Some("Vertex shader module"), 
                 source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/vertex.wgsl").into()) 
             });
-
+        
 
         let render_bind_group = device.create_bind_group(&BindGroupDescriptor{
             label: Some("Render Bind Group"),
@@ -425,7 +394,7 @@ impl State {
             multiview: None, 
             cache: None, 
         });
-
+        */
 
         Ok (
             Self { 
@@ -439,13 +408,13 @@ impl State {
                 surface,
                 init_pipeline: Some(init_pipeline),
                 laplacian_pipeline: Some(laplacian_pipeline),
-                pipeline: Some(render_pipeline),
+               // pipeline: Some(render_pipeline),
                 surf_config: config,
                 is_surface_configured: false,
                 mouse_down: None,
                 camera: camera,
                 uniforms_voxels_storagetexture: Some(uniforms_voxels_storagetexture),
-                render_bind_group: Some(render_bind_group),
+                //render_bind_group: Some(render_bind_group),
                 voxel_grid_buffer_a: Some(voxel_grid_buffer_a),
                 voxel_grid_buffer_b: Some(voxel_grid_buffer_b),
                 uniform_buffer: Some(uni),
@@ -457,11 +426,9 @@ impl State {
                 rng: rng,
                 texture_view: texture_view,
                 read_a: true,
-                raymarch_pipeline: raymarch_pipeline,
-                world_vertices: world_vertices,
-                camera_vertices: VoxelVertices{ vertices: Vec::new() }
-
-            }
+                //raymarch_pipeline: raymarch_pipeline,
+                voxelgrid_vertices: voxelgrid_vertices,
+                 }
         )
     }
 
@@ -536,7 +503,7 @@ impl State {
         };
 
         self.uniforms_voxels_storagetexture = Some(self.device.create_bind_group(bind_group_descriptor));
-
+/* 
         self.render_bind_group = Some(self.device.create_bind_group(&BindGroupDescriptor{
             label: Some("Render Bind Group"),
             layout: self.render_bind_group_layout.as_ref().unwrap(),
@@ -545,6 +512,7 @@ impl State {
                 resource: wgpu::BindingResource::TextureView(&self.texture_view)
             }]
         }));
+        */
 
         }
 
@@ -568,14 +536,51 @@ impl State {
         }
         else {println!("No size passed to render\n") }
         let size = self.window.inner_size();
-        // Fresh compute voxel grid coords from world -> camera
-        self.camera_vertices.vertices.clear();
-        for i in self.world_vertices.vertices.iter() {
-            self.camera_vertices.vertices.push(self.camera.world_to_ruf(i));
+        
+        // Pixel into world units
+        let centre_top = size.height as f32 / 2.0; // 1:1 vertical pixels and up vector
+        let right_scale = size.width as f32 / 2.0 / centre_top; // garantees FOV 90 in vertical
+        let centre_right = centre_top * right_scale;
+
+        let neg_inf = f32::NEG_INFINITY;
+        let inf = f32::INFINITY;
+        let max_r = neg_inf;
+        let max_u = neg_inf;
+        let min_r = inf;
+        let min_u = inf;
+
+        for i in 0..8 {
+            // VOXEL VERTICES INTO RUF
+            match self.voxelgrid_vertices.get_point(i, SystemGet::WORLD) {
+                SystemSet::WORLD(point) => {
+                     let ruf_point = self.camera.world_to_ruf(&point);
+                    self.voxelgrid_vertices.set_point(i, SystemSet::RUF(ruf_point))
+                },
+                _ => { println!("Couldn't get voxelgrid WORLD vertex.\n"); } }
+            // PROJECT ONTO NEAR PLANE
+            match self.voxelgrid_vertices.get_point(i, SystemGet::RUF) {
+                SystemSet::RUF(point) => {
+                    let projection = self.camera.ruf_to_ru_plane(&point, &right_scale);
+                    self.voxelgrid_vertices.set_point(i, SystemSet::PLANE(projection));
+                },
+                _ => { println!("Couldn't get voxelgrid RUF vertex.\n"); }
+            }
+            // COMPUTE BOUNDING BOX
+            match self.voxelgrid_vertices.get_point(i, SystemGet::PLANE) {
+                SystemSet::PLANE(point) => {
+                    max_r = point[0].max(max_r);
+                    max_u = point[1].max(max_u);
+                    min_r = point[0].min(min_r);
+                    min_u = point[1].min(min_u);
+                },
+                _ => { println!("Couldn't get voxelgrid PLANE vertex.\n"); }
+            }
         }
+
+        // AABB 
+        
         let plane_centre = self.camera.world_to_ruf(&self.camera.centre); // express near plane centre in terms of r u f
-        let vertical_distance = size.height as f32 / 2.0; // same magnitude as plane_centre
-        let horizontal_distance = size.width as f32 / 2.0;
+        let horizontal_distance = size.width as f32 / 2.0; // 1 pixel in y = 1 world 
 
         let left_edge = OrbitalCamera::add(plane_centre.clone(), OrbitalCamera::scale(OrbitalCamera::negate(self.camera.r.clone()), horizontal_distance));
         let right_edge = OrbitalCamera::add(plane_centre.clone(), OrbitalCamera::scale(self.camera.r.clone(), horizontal_distance));
@@ -585,6 +590,27 @@ impl State {
 
         let top_right_corner = OrbitalCamera::add(right_edge.clone(), OrbitalCamera::scale(self.camera.u.clone(), vertical_distance));
         let bottom_right_corner = OrbitalCamera::add(right_edge.clone(), OrbitalCamera::scale(self.camera.u.clone(), - vertical_distance));
+
+        // NOW CHECK VOXEL GRID VERTICES BOUNDS!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         // this owns the texture, wrapping it with some extra swapchain-related info
         let output = self.surface.get_current_texture()?;
@@ -599,6 +625,8 @@ impl State {
         // UPDATE TIMESTEP //
         let now = std::time::Instant::now();
         let duration = ((now - self.time).as_secs_f32()).min(0.1666666); // stability bound for 3D euler integration
+        let fps = 1.0 / duration;
+        println!("fps: {}\n", fps);
         self.time = now;
 
         self.read_a = if self.init_complete{ !self.read_a}
@@ -648,7 +676,7 @@ impl State {
             compute_pass.dispatch_workgroups((self.dims.i/8) + self.i_ceil, (self.dims.j/4) + self.j_ceil, (self.dims.k/8) + self.k_ceil); 
             }
         }
-
+        /* 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { // mutable borrow of encoder here
                 label: Some("Render Pass"),
@@ -675,7 +703,7 @@ impl State {
             render_pass.set_bind_group(0, Some(self.render_bind_group.as_ref().unwrap()), &[]);
             render_pass.draw(0..3, 0..1);
         } // encoder borrow dropped here
-    
+        */
         // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish())); // allowing encoder call here
         output.present();
