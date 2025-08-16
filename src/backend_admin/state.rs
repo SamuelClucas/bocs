@@ -537,80 +537,49 @@ impl State {
         else {println!("No size passed to render\n") }
         let size = self.window.inner_size();
         
-        // Pixel into world units
-        let centre_top = size.height as f32 / 2.0; // 1:1 vertical pixels and up vector
-        let right_scale = size.width as f32 / 2.0 / centre_top; // garantees FOV 90 in vertical
-        let centre_right = centre_top * right_scale;
-
-        let neg_inf = f32::NEG_INFINITY;
-        let inf = f32::INFINITY;
-        let max_r = neg_inf;
-        let max_u = neg_inf;
-        let min_r = inf;
-        let min_u = inf;
-
-        for i in 0..8 {
-            // VOXEL VERTICES INTO RUF
-            match self.voxelgrid_vertices.get_point(i, SystemGet::WORLD) {
-                SystemSet::WORLD(point) => {
-                     let ruf_point = self.camera.world_to_ruf(&point);
-                    self.voxelgrid_vertices.set_point(i, SystemSet::RUF(ruf_point))
-                },
-                _ => { println!("Couldn't get voxelgrid WORLD vertex.\n"); } }
-            // PROJECT ONTO NEAR PLANE
-            match self.voxelgrid_vertices.get_point(i, SystemGet::RUF) {
-                SystemSet::RUF(point) => {
-                    let projection = self.camera.ruf_to_ru_plane(&point, &right_scale);
-                    self.voxelgrid_vertices.set_point(i, SystemSet::PLANE(projection));
-                },
-                _ => { println!("Couldn't get voxelgrid RUF vertex.\n"); }
-            }
-            // COMPUTE BOUNDING BOX
-            match self.voxelgrid_vertices.get_point(i, SystemGet::PLANE) {
-                SystemSet::PLANE(point) => {
-                    max_r = point[0].max(max_r);
-                    max_u = point[1].max(max_u);
-                    min_r = point[0].min(min_r);
-                    min_u = point[1].min(min_u);
-                },
-                _ => { println!("Couldn't get voxelgrid PLANE vertex.\n"); }
-            }
-        }
-
-        // AABB 
         
-        let plane_centre = self.camera.world_to_ruf(&self.camera.centre); // express near plane centre in terms of r u f
-        let horizontal_distance = size.width as f32 / 2.0; // 1 pixel in y = 1 world 
 
-        let left_edge = OrbitalCamera::add(plane_centre.clone(), OrbitalCamera::scale(OrbitalCamera::negate(self.camera.r.clone()), horizontal_distance));
-        let right_edge = OrbitalCamera::add(plane_centre.clone(), OrbitalCamera::scale(self.camera.r.clone(), horizontal_distance));
+        let bounding_box = {
+            // Pixel into world units
+            let centre_top_d = size.height as f32 / 2.0; // 1:1 vertical pixels and up vector
+            let right_scale = size.width as f32 / 2.0 / centre_top_d; // garantees FOV 90 in vertical
+            let centre_right_d = centre_top_d * right_scale;
 
-        let top_left_corner = OrbitalCamera::add(left_edge.clone(), OrbitalCamera::scale(self.camera.u.clone(), vertical_distance));
-        let bottom_left_corner = OrbitalCamera::add(left_edge.clone(), OrbitalCamera::scale(self.camera.u.clone(), - vertical_distance));
+            let mut max_r = centre_right_d;
+            let mut max_u = centre_top_d;
+            let mut min_r = - centre_right_d;
+            let mut min_u = - centre_top_d;
+            for i in 0..8 {
+                // VOXEL VERTICES INTO RUF
+                match self.voxelgrid_vertices.get_point(i, SystemGet::WORLD) {
+                    SystemSet::WORLD(point) => {
+                        let ruf_point = self.camera.world_to_ruf(&point);
+                        self.voxelgrid_vertices.set_point(i, SystemSet::RUF(ruf_point))
+                    },
+                    _ => { println!("Couldn't get voxelgrid WORLD vertex.\n"); } }
+                // PROJECT ONTO NEAR PLANE
+                match self.voxelgrid_vertices.get_point(i, SystemGet::RUF) {
+                    SystemSet::RUF(point) => {
+                        let projection = self.camera.ruf_to_ru_plane(&point, &right_scale);
+                        self.voxelgrid_vertices.set_point(i, SystemSet::PLANE(projection));
+                    },
+                    _ => { println!("Couldn't get voxelgrid RUF vertex.\n"); }
+                }
+                // COMPUTE BOUNDING BOX
+                match self.voxelgrid_vertices.get_point(i, SystemGet::PLANE) {
+                    SystemSet::PLANE(point) => {
+                        max_r = point[0].max(max_r);
+                        max_u = point[1].max(max_u);
+                        min_r = point[0].min(min_r);
+                        min_u = point[1].min(min_u);
+                    },
+                    _ => { println!("Couldn't get voxelgrid PLANE vertex.\n"); }
+                }
+            }
+            [min_r, min_u, max_r, max_u]
+        };
 
-        let top_right_corner = OrbitalCamera::add(right_edge.clone(), OrbitalCamera::scale(self.camera.u.clone(), vertical_distance));
-        let bottom_right_corner = OrbitalCamera::add(right_edge.clone(), OrbitalCamera::scale(self.camera.u.clone(), - vertical_distance));
-
-        // NOW CHECK VOXEL GRID VERTICES BOUNDS!
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        
 
         // this owns the texture, wrapping it with some extra swapchain-related info
         let output = self.surface.get_current_texture()?;
