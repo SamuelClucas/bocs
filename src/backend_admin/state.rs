@@ -17,6 +17,7 @@ struct Uniforms {
     /// World -> Camera basis vectors, timestep, and random seed for voxel grid init
     /// Wgsl expects Vec4<f32> (16 byte alignment
     dims: [u32; 4], // i, j, k, ij plane stride for k
+    bounding_box: [i32; 4],
     cam_pos: [f32; 4], // [2]< padding
     forward: [f32; 4], // [2]< padding
     centre: [f32; 4],
@@ -54,7 +55,7 @@ pub struct State {
 
     init_pipeline: Option<ComputePipeline>,
     laplacian_pipeline: Option<ComputePipeline>,
-    //raymarch_pipeline: ComputePipeline,
+    raymarch_pipeline: ComputePipeline,
 
     uniforms_voxels_storagetexture: Option<BindGroup>,
     pub camera: OrbitalCamera,
@@ -75,11 +76,33 @@ pub struct State {
     texture_view: TextureView,
     read_a: bool,
     voxelgrid_vertices: VoxelVertices,
+    w_ceil: i32,
+    h_ceil: i32,
+    raymarch_group: i32
 }
 
 impl State {
+    /// Determines dispatch dims on each render() 
+    pub fn update_raygroup_ceil(&mut self, bounding_box: [i32; 4]) -> (u32, u32) {
+        let width = bounding_box[2] + bounding_box[0];  
+        let height = bounding_box[3] + bounding_box[1];
+        self.w_ceil = if width % self.raymarch_group == 0 { 0 }
+            else { 1 };
+        self.h_ceil = if height % self.raymarch_group == 0 { 0 } 
+            else { 1 };
+        
+        (
+            ((width / self.raymarch_group) + self.w_ceil) as u32, 
+            ((height / self.raymarch_group) + self.h_ceil) as u32
+        )
+    }
     pub async fn new(window: Arc<Window>) -> Result<Self> {
         let size = window.inner_size();
+
+        let raymarch_group = 16;
+        let w_ceil= 0; // updated on each pass in render()
+        let h_ceil= 0;
+
         let camera = OrbitalCamera::new(200.0, 0.0, 0.0, &size);
 
         let dims = VoxelDims {
@@ -89,20 +112,11 @@ impl State {
         };
 
         let voxelgrid_vertices = VoxelVertices::centre_at_origin(&dims);
-
-        let i_ceil = if dims.i % 8 == 0 {
-            0
-        }
-        else { 1};
-
-        let j_ceil = if dims.j % 4 == 0 {
-            0
-        }
+        let i_ceil = if dims.i % 8 == 0 { 0 }
         else { 1 };
-
-        let k_ceil = if dims.k % 8 == 0 {
-            0
-        }
+        let j_ceil = if dims.j % 4 == 0 { 0 }
+        else { 1 };
+        let k_ceil = if dims.k % 8 == 0 { 0 }
         else { 1};
 
         // Instance == handle to GPU
@@ -152,6 +166,7 @@ impl State {
         let mut rng = rand::rng();
         let uniforms = Uniforms {
             dims: [dims.i as u32, dims.j as u32, dims.k as u32, (dims.i * dims.j) as u32],
+            bounding_box: [0, 0, 0, 0], // set in render() 
             cam_pos: [camera.c[0], camera.c[1], camera.c[2], 0.0 as f32],
             forward: [camera.f[0], camera.f[1], camera.f[2], 0.0 as f32],
             centre: [camera.centre[0], camera.centre[1], camera.centre[2], 0.0 as f32],
@@ -291,7 +306,7 @@ impl State {
                 zero_initialize_workgroup_memory: false 
             }
         });
-        /* 
+         
         let raymarch_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Raymarch"),
             layout: Some(&compute_pipeline_layout),
@@ -303,7 +318,7 @@ impl State {
                 zero_initialize_workgroup_memory: false 
             }
         });
-        */
+        
        
         // END of COMPUTE //
 
@@ -426,8 +441,11 @@ impl State {
                 rng: rng,
                 texture_view: texture_view,
                 read_a: true,
-                //raymarch_pipeline: raymarch_pipeline,
+                raymarch_pipeline: raymarch_pipeline,
                 voxelgrid_vertices: voxelgrid_vertices,
+                raymarch_group: raymarch_group,
+                w_ceil: w_ceil,
+                h_ceil: h_ceil
                  }
         )
     }
@@ -535,16 +553,15 @@ impl State {
             let _ = self.window.request_inner_size(size);
         }
         else {println!("No size passed to render\n") }
+
         let size = self.window.inner_size();
-        
-        
 
+        // Pixel into world units
+        let centre_top_d = size.height as f32 / 2.0; // 1:1 vertical pixels and up vector
+        let right_scale = size.width as f32 / 2.0 / centre_top_d; // garantees FOV 90 in vertical
+        let centre_right_d = centre_top_d * right_scale;
+        
         let bounding_box = {
-            // Pixel into world units
-            let centre_top_d = size.height as f32 / 2.0; // 1:1 vertical pixels and up vector
-            let right_scale = size.width as f32 / 2.0 / centre_top_d; // garantees FOV 90 in vertical
-            let centre_right_d = centre_top_d * right_scale;
-
             let mut max_r = f32::NEG_INFINITY;
             let mut max_u = f32::NEG_INFINITY;
             let mut min_r = f32::INFINITY;
@@ -577,13 +594,11 @@ impl State {
                     _ => { println!("Couldn't get voxelgrid PLANE vertex.\n"); }
                 }
             }
-            [min_r.max(-centre_right_d), 
-            min_u.max(- centre_top_d), 
-            max_r.min(centre_right_d), 
-            max_u.min(centre_top_d)]
+            [(min_r - 1.0).max(-centre_right_d) as i32, 
+            (min_u - 1.0).max(-centre_top_d) as i32, 
+            (max_r + 1.0).min(centre_right_d) as i32, 
+            (max_u + 1.0).min(centre_top_d) as i32]
         };
-
-        
 
         // this owns the texture, wrapping it with some extra swapchain-related info
         let output = self.surface.get_current_texture()?;
@@ -607,11 +622,12 @@ impl State {
 
         let uniforms = Uniforms {
             dims: [self.dims.i as u32, self.dims.j as u32, self.dims.k as u32, (self.dims.i * self.dims.j) as u32],
+            bounding_box: [bounding_box[0], bounding_box[1], bounding_box[2], bounding_box[3]],
             cam_pos: [self.camera.c[0], self.camera.c[1], self.camera.c[2], 0.0 as f32],
             forward: [self.camera.f[0], self.camera.f[1], self.camera.f[2], 0.0 as f32],
             centre: [self.camera.centre[0], self.camera.centre[1], self.camera.centre[2], 0.0 as f32],
             up: [self.camera.u[0], self.camera.u[1], self.camera.u[2], 0.0 as f32],
-            right: [self.camera.r[0], self.camera.r[1], self.camera.r[2], 0.0 as f32],
+            right: [self.camera.r[0], self.camera.r[1], self.camera.r[2], right_scale],
             timestep: [duration, 0.0 as f32, 0.0 as f32, 0.0 as f32],
             seed: [0.0, 0.0 as f32, 0.0 as f32, 0.0 as f32], // could later reintroduce seed here for hot sim resizing 
             flags: [self.read_a as u32, 0, 0, 0]
@@ -622,17 +638,21 @@ impl State {
         // UPDATE TIMESTEP COMPLETE //
 
         if !self.init_complete {
-        {   
+        {   // INIT
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor{
                 label: Some("Init"),
                 timestamp_writes: None
                 });
-    
 
             compute_pass.set_pipeline(self.init_pipeline.as_ref().unwrap());
             compute_pass.set_bind_group(0, self.uniforms_voxels_storagetexture.as_ref().unwrap(), &[]); 
             compute_pass.dispatch_workgroups((self.dims.i/8) + self.i_ceil, (self.dims.j/4) + self.j_ceil, (self.dims.k/8) + self.k_ceil);  // group size is 8 * 4 * 8 <= 256 (256, 256, 64 respective limits)
             self.init_complete = true;
+            // Raymarch
+            compute_pass.set_pipeline(&self.raymarch_pipeline);
+            compute_pass.set_bind_group(0, self.uniforms_voxels_storagetexture.as_ref().unwrap(), &[]); 
+            let (dispatch_x, dispatch_y) = self.update_raygroup_ceil(bounding_box);
+            compute_pass.dispatch_workgroups(dispatch_x, dispatch_y, 1); 
         }
         }
         else {
@@ -645,8 +665,7 @@ impl State {
 
             compute_pass.set_pipeline(self.laplacian_pipeline.as_ref().unwrap());
             compute_pass.set_bind_group(0, self.uniforms_voxels_storagetexture.as_ref().unwrap(), &[]); 
-            
-            compute_pass.dispatch_workgroups((self.dims.i/8) + self.i_ceil, (self.dims.j/4) + self.j_ceil, (self.dims.k/8) + self.k_ceil); 
+            compute_pass.dispatch_workgroups((self.dims.i/8) + self.i_ceil, (self.dims.j/4) + self.j_ceil, (self.dims.k/8) + self.k_ceil);  // group size is 8 * 4 * 8 <= 256 (256, 256, 64 respective limits)
             }
         }
         /* 
