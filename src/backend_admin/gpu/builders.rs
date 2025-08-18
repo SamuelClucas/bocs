@@ -14,6 +14,22 @@ impl BindGroupLayoutBuilder {
             entries: Vec::new()
         }
     }
+    pub fn with_sampled_texture(mut self,
+        visibility: ShaderStages
+    ) -> Self {
+        let e = BindGroupLayoutEntry{
+            binding: self.entries.len() as u32,
+            visibility: visibility,
+            ty: wgpu::BindingType::Texture { 
+                sample_type: TextureSampleType::Uint, 
+                view_dimension: TextureViewDimension::D2, 
+                multisampled: false },
+            count: None
+        };
+        self.entries.push(e);
+        self
+    }
+
     pub fn with_storage_buffer(mut self, 
         visibility: ShaderStages, 
         offset_behaviour: OffsetBehaviour,
@@ -91,9 +107,19 @@ impl BindGroupLayoutBuilder {
             self.entries.push(e);
             self
         }
+    pub fn with_sampler(mut self,
+    visibility: ShaderStages) -> Self {
+        let e = BindGroupLayoutEntry {
+            binding: self.entries.len() as u32,
+            visibility: visibility,
+            ty: wgpu::BindingType::Sampler(SamplerBindingType::Filtering),
+            count: None
+        };
+        self.entries.push(e);
+        self
+    }
 
     pub fn build(self, device: &Device) -> BindGroupLayout {
-
         device.create_bind_group_layout(&BindGroupLayoutDescriptor{
             label: self.label.as_deref(),
             entries: &self.entries

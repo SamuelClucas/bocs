@@ -35,7 +35,7 @@ impl ApplicationHandler<State> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) { // ran once on init
         let primary_monitor = event_loop.primary_monitor().expect("No primary monitor\n");
 
-        let mut physical_dims = primary_monitor.size();
+        let physical_dims = primary_monitor.size();
 
         self.aspect_ratio = Some(physical_dims.width as f32 / physical_dims.height as f32);
         let physical_width = physical_dims.width as f32;

@@ -6,7 +6,7 @@ use crate::{world::{camera::OrbitalCamera, voxel_grid::*},
                                 OffsetBehaviour}, 
                         builders::{BindGroupLayoutBuilder}}};
 use anyhow::{Result};
-use wgpu::{util::DeviceExt, wgt::TextureDescriptor, BindGroup, BindGroupEntry, BindGroupLayout, BufferBinding, BufferUsages, ComputePipeline, Extent3d, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
+use wgpu::{util::DeviceExt, wgt::TextureDescriptor, BindGroup, BindGroupEntry, BindGroupLayout, BufferBinding, BufferUsages, ComputePipeline, Extent3d, FilterMode, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
 use rand::prelude::*;
 use wgpu::TextureUsages;
 
@@ -60,8 +60,8 @@ pub struct State {
 
     uniforms_voxels_storagetexture: Option<BindGroup>,
     pub camera: OrbitalCamera,
-    //pipeline: Option<wgpu::RenderPipeline>,
-   // render_bind_group: Option<BindGroup>,
+    pipeline: Option<wgpu::RenderPipeline>,
+    render_bind_group: Option<BindGroup>,
     uniform_buffer: Option<wgpu::Buffer>,
     voxel_grid_buffer_a: Option<wgpu::Buffer>,
     voxel_grid_buffer_b: Option<wgpu::Buffer>,
@@ -79,7 +79,8 @@ pub struct State {
     voxelgrid_vertices: VoxelVertices,
     w_ceil: i32,
     h_ceil: i32,
-    raymarch_group: i32
+    raymarch_group: i32,
+    sampler: wgpu::Sampler
 }
 
 impl State {
@@ -188,7 +189,7 @@ impl State {
         let storage_texture = device.create_texture(&TextureDescriptor{
             label: Some("Storage Texture"),
             size: Extent3d {
-                width: size.width, // TODO: CREATE NEW TEXTURE ON WINDOW RESIZE
+                width: size.width, 
                 height: size.height,
                 depth_or_array_layers: 1
             },
@@ -196,7 +197,7 @@ impl State {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: TextureUsages::STORAGE_BINDING,
+            usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING,
             view_formats: &[wgpu::TextureFormat::Rgba8Unorm]
         });
 
@@ -231,12 +232,25 @@ impl State {
             wgpu::TextureViewDimension::D2)
             .build(&device);
 
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor{
+            label: Some("Sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToBorder,
+            address_mode_v: wgpu::AddressMode::ClampToBorder,
+            address_mode_w: wgpu::AddressMode::ClampToBorder,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Linear,
+            lod_min_clamp: 1.0,
+            lod_max_clamp: 1.0,
+            compare: None,
+            anisotropy_clamp: 1,
+            border_color: Some(wgpu::SamplerBorderColor::OpaqueWhite)
+        });
+
+        
         let render_bind_group_layout = BindGroupLayoutBuilder::new("Render Bind Group".to_string())
-                .with_storage_texture(
-                    ShaderStages::FRAGMENT, 
-                    TextureFormat::Rgba8Unorm, 
-                    wgpu::StorageTextureAccess::ReadOnly, 
-                    wgpu::TextureViewDimension::D2)
+                .with_sampled_texture(ShaderStages::FRAGMENT)
+                .with_sampler(ShaderStages::FRAGMENT)
                 .build(&device);
 
         let bind_group_descriptor = &wgpu::BindGroupDescriptor {
@@ -341,12 +355,12 @@ impl State {
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
-        /* 
+         
         // TEXTURES //
         let fragment = device.create_shader_module(ShaderModuleDescriptor{
             label: Some("Fragment shader module"),
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/fragment.wgsl").into())
-        });
+            });
 
         let vertex = device.create_shader_module(
             ShaderModuleDescriptor { 
@@ -354,14 +368,18 @@ impl State {
                 source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/vertex.wgsl").into()) 
             });
         
-
-        let render_bind_group = device.create_bind_group(&BindGroupDescriptor{
+        let render_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor{
             label: Some("Render Bind Group"),
             layout: &render_bind_group_layout,
             entries: &[BindGroupEntry{
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(&texture_view)
-            }]
+                resource: wgpu::BindingResource::Sampler(&sampler)},
+
+                BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&texture_view)
+                }
+            ]
         });
 
         let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor{
@@ -372,7 +390,7 @@ impl State {
 
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor { 
-            label: Some("MeowPipeline"), 
+            label: Some("Render Pipeline"), 
             layout: Some(&render_pipeline_layout), 
             vertex: wgpu::VertexState{
                 module: &vertex,
@@ -411,7 +429,7 @@ impl State {
             multiview: None, 
             cache: None, 
         });
-        */
+        
 
         Ok (
             Self { 
@@ -425,13 +443,13 @@ impl State {
                 surface,
                 init_pipeline: Some(init_pipeline),
                 laplacian_pipeline: Some(laplacian_pipeline),
-               // pipeline: Some(render_pipeline),
+                pipeline: Some(render_pipeline),
                 surf_config: config,
                 is_surface_configured: false,
                 mouse_down: None,
                 camera: camera,
                 uniforms_voxels_storagetexture: Some(uniforms_voxels_storagetexture),
-                //render_bind_group: Some(render_bind_group),
+                render_bind_group: Some(render_bind_group),
                 voxel_grid_buffer_a: Some(voxel_grid_buffer_a),
                 voxel_grid_buffer_b: Some(voxel_grid_buffer_b),
                 uniform_buffer: Some(uni),
@@ -447,8 +465,9 @@ impl State {
                 voxelgrid_vertices: voxelgrid_vertices,
                 raymarch_group: raymarch_group,
                 w_ceil: w_ceil,
-                h_ceil: h_ceil
-                 }
+                h_ceil: h_ceil,
+                sampler
+                }
         )
     }
 
@@ -523,16 +542,21 @@ impl State {
         };
 
         self.uniforms_voxels_storagetexture = Some(self.device.create_bind_group(bind_group_descriptor));
-/* 
-        self.render_bind_group = Some(self.device.create_bind_group(&BindGroupDescriptor{
+ 
+        self.render_bind_group = Some(self.device.create_bind_group(&wgpu::BindGroupDescriptor{
             label: Some("Render Bind Group"),
             layout: self.render_bind_group_layout.as_ref().unwrap(),
             entries: &[BindGroupEntry{
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(&self.texture_view)
-            }]
+                resource: wgpu::BindingResource::Sampler(&self.sampler)},
+
+                BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&self.texture_view)
+                }
+            ]
         }));
-        */
+        
 
         }
 
@@ -623,7 +647,7 @@ impl State {
         else { self.read_a};
 
         let uniforms = Uniforms {
-            window_dims: [size.width, size.height, 0, 0],
+            window_dims: [size.width/2, size.height/2, 0, 0],
             dims: [self.dims.i as u32, self.dims.j as u32, self.dims.k as u32, (self.dims.i * self.dims.j) as u32],
             bounding_box: [bounding_box[0], bounding_box[1], bounding_box[2], bounding_box[3]],
             cam_pos: [self.camera.c[0], self.camera.c[1], self.camera.c[2], 0.0 as f32],
@@ -671,7 +695,7 @@ impl State {
             compute_pass.dispatch_workgroups((self.dims.i/8) + self.i_ceil, (self.dims.j/4) + self.j_ceil, (self.dims.k/8) + self.k_ceil);  // group size is 8 * 4 * 8 <= 256 (256, 256, 64 respective limits)
             }
         }
-        /* 
+        
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { // mutable borrow of encoder here
                 label: Some("Render Pass"),
@@ -698,7 +722,7 @@ impl State {
             render_pass.set_bind_group(0, Some(self.render_bind_group.as_ref().unwrap()), &[]);
             render_pass.draw(0..3, 0..1);
         } // encoder borrow dropped here
-        */
+        
         // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish())); // allowing encoder call here
         output.present();
