@@ -77,7 +77,6 @@ impl OrbitalCamera {
     /// recompute ruf basis vectors on camera movement
     /// TODO: implement angle-based mapping of dx and dy into world deltas to avoid normalisation error drift
     pub fn update(&mut self, dx: Option<f32>, dy: Option<f32>, dscroll: Option<f32>, size: Option<&PhysicalSize<u32>>) {
-
         // HANDLE ZOOM
         let multiplier_to_surface = if let Some(d_scroll) = dscroll{
             let old_mag = Self::magnitude(&self.c);
@@ -114,7 +113,6 @@ impl OrbitalCamera {
 
         let multiplier_to_surface = Self::magnitude(&self.c);  // HACKY FIX - float division error build up!!!
 
-
         // HANDLE UP NEAR POLES
         let up = if OrbitalCamera::dot(&self.c, &[0.0, 1.0, 0.0]) > 0.9 {
             [self.c[0] + 1.0, self.c[1], self.c[2]]
@@ -137,7 +135,9 @@ impl OrbitalCamera {
         let pos = [i,j,k];
         let mag = Self::magnitude(&pos);
         // forward is negative camera pos, normalised by its magnitude
-        let forward = OrbitalCamera::normalise(OrbitalCamera::negate(pos.clone()), mag);
+        let forward = OrbitalCamera::normalise(
+            OrbitalCamera::negate(pos.clone()), 
+            mag);
 
         // f* kf = centre of near plane
         // near-plane edges = (k * kf) +- (max(width, height) * r or u) (r for horizontal, u for vertical)
