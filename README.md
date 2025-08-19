@@ -10,7 +10,7 @@ For a theoretical overview of the engine's functionality, please see the docs [h
 ## Current Status: See plan updates [here](./docs/Current%20Plan.md)  
 > [!NOTE]
 > This is an early-stage, work-in-progress project. I'm building everything from scratch — the rendering pipeline, the simulation logic, and the core data structures — which means progress is steady but intentional.  </br>
-> Currently, the app should be ran on one monitor only (no switching). This is due to a lack of perceived clarity and consistency across platforms using winit's dpi crate. See [here](../../docs/lights%20camera%20action/The%20Near%20Plane.md) for notes on my implementation of a camera frustum and why the aspect ratio of the window is integral to the app's functionality. I plan to address DPI-awareness in future updates.
+> Currently, the app should be ran on one monitor only (no switching). I plan to address DPI-awareness in future updates.
 
 Expect:
 
@@ -34,7 +34,7 @@ I'm particularly interested in questions like:
 * How can we develop a fully integrated cellular model — from genome to phenotype — that exhibits real, *in-vivo* behaviour?
 * Can such a model be used in conjunction with wet-lab experimentation to accelerate research?
 
-Ultimately, I'd love to explore the design of **synthetic cells** through *in-silico* modelling. I learn best by studying theory and validating through programmatic implementation, so I am developing my own simulation engine.
+Ultimately, I'd love to successfully recapitulate cellular processes *in silico*.
 
 
 ## My Background
