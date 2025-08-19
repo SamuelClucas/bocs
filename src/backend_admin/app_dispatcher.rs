@@ -15,7 +15,6 @@ pub struct App {
     proxy: Option<EventLoopProxy<State>>,
     aspect_ratio: f32,
     size: Option<PhysicalSize<u32>>,
-    scale_factor: Option<f64>,
     minimum_size: PhysicalSize<u32>,
     maximum_size: Option<PhysicalSize<u32>>
 }
@@ -23,12 +22,11 @@ pub struct App {
 impl App  {
     pub fn new (fun: impl FnOnce()-> EventLoopProxy<State>) -> App {
         App {
-            scale_factor: None,
             state: None,
             proxy:  Some(fun()), // smuggle proxy into app using move closure for downstream requests
             aspect_ratio: 16.0/9.0, // width/height,
             size: None,
-            minimum_size: PhysicalSize::new(320, 180), // 20x a_r
+            minimum_size: PhysicalSize::new(740, 360), // 40x a_r
             maximum_size: None
         }
     }}

@@ -566,19 +566,11 @@ impl State {
             ]
             }));
         }
-        self.window.request_redraw();
-        }
 
-    pub fn handle_key(&self, event_loop: &winit::event_loop::ActiveEventLoop, code: winit::keyboard::KeyCode, is_pressed: bool) {
-        match (code, is_pressed) {
-            (winit::keyboard::KeyCode::Escape, true) => {
-                println!("Slipping through my fingers all the time\nI try to capture every minute... \nThe feeling in it, slipping through my fingers all the time... \nUntil next time!");
-                event_loop.exit()
-            },
-            _ => {}
         }
-    }
+    }   
 
+    
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         // Pixel into world units
         let centre_top_d = self.surf_config.height as f32 / 2.0; // 1:1 vertical pixels and up vector
@@ -638,7 +630,7 @@ impl State {
         // UPDATE TIMESTEP //
         let now = std::time::Instant::now();
         let duration = ((now - self.time).as_secs_f32()).min(0.1666666); // stability bound for 3D euler integration
-        let fps = 1.0 / duration;
+        // let fps = 1.0 / duration;
         //println!("fps: {}\n", fps);
         self.time = now;
 
@@ -672,12 +664,12 @@ impl State {
                 });
 
             compute_pass.set_pipeline(self.init_pipeline.as_ref().unwrap());
-            compute_pass.set_bind_group(0, self.uniforms_voxels_storagetexture.as_ref().unwrap(), &[]); 
+            compute_pass.set_bind_group(0, self.resources.as_ref().unwrap(), &[]); 
             compute_pass.dispatch_workgroups((self.dims.i/8) + self.i_ceil, (self.dims.j/4) + self.j_ceil, (self.dims.k/8) + self.k_ceil);  // group size is 8 * 4 * 8 <= 256 (256, 256, 64 respective limits)
             self.init_complete = true;
             // Raymarch
             compute_pass.set_pipeline(&self.raymarch_pipeline);
-            compute_pass.set_bind_group(0, self.uniforms_voxels_storagetexture.as_ref().unwrap(), &[]); 
+            compute_pass.set_bind_group(0, self.resources.as_ref().unwrap(), &[]); 
             let (dispatch_x, dispatch_y) = self.update_raygroup_ceil(bounding_box);
             compute_pass.dispatch_workgroups(dispatch_x, dispatch_y, 1); 
         }
@@ -691,11 +683,11 @@ impl State {
     
 
             compute_pass.set_pipeline(self.laplacian_pipeline.as_ref().unwrap());
-            compute_pass.set_bind_group(0, self.uniforms_voxels_storagetexture.as_ref().unwrap(), &[]); 
+            compute_pass.set_bind_group(0, self.resources.as_ref().unwrap(), &[]); 
             compute_pass.dispatch_workgroups((self.dims.i/8) + self.i_ceil, (self.dims.j/4) + self.j_ceil, (self.dims.k/8) + self.k_ceil);  // group size is 8 * 4 * 8 <= 256 (256, 256, 64 respective limits)
             // Raymarch
             compute_pass.set_pipeline(&self.raymarch_pipeline);
-            compute_pass.set_bind_group(0, self.uniforms_voxels_storagetexture.as_ref().unwrap(), &[]); 
+            compute_pass.set_bind_group(0, self.resources.as_ref().unwrap(), &[]); 
             let (dispatch_x, dispatch_y) = self.update_raygroup_ceil(bounding_box);
             compute_pass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
             }
@@ -736,4 +728,13 @@ impl State {
 
     }
 
+    pub fn handle_key(&self, event_loop: &winit::event_loop::ActiveEventLoop, code: winit::keyboard::KeyCode, is_pressed: bool) {
+        match (code, is_pressed) {
+            (winit::keyboard::KeyCode::Escape, true) => {
+                event_loop.exit()
+            },
+            _ => {}
+        }
+    
+    }
 }
