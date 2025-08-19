@@ -6,7 +6,7 @@ use crate::{world::{camera::OrbitalCamera, voxel_grid::*},
                                 OffsetBehaviour}, 
                         builders::{BindGroupLayoutBuilder}}};
 use anyhow::{Result};
-use wgpu::{util::DeviceExt, wgt::TextureDescriptor, BindGroup, BindGroupEntry, BindGroupLayout, BufferBinding, BufferUsages, ComputePipeline, Extent3d, FilterMode, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
+use wgpu::{util::DeviceExt, wgt::TextureDescriptor, BindGroup, BindGroupEntry, BindGroupLayout, BufferBinding, BufferUsages, ComputePipeline, Extent3d, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
 use rand::prelude::*;
 use wgpu::TextureUsages;
 
@@ -136,7 +136,7 @@ impl State {
 
         let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor{
             label: None,
-            required_features: wgpu::Features::default() | wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER, //wgpu::Features::POLYGON_MODE_LINE,
+            required_features: wgpu::Features::default(), //wgpu::Features::POLYGON_MODE_LINE,
             required_limits: wgpu::Limits::defaults(),
             trace: wgpu::Trace::Off,
             memory_hints: Default::default(),
@@ -232,9 +232,9 @@ impl State {
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor{
             label: Some("Sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToBorder,
-            address_mode_v: wgpu::AddressMode::ClampToBorder,
-            address_mode_w: wgpu::AddressMode::ClampToBorder,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Linear,
@@ -242,7 +242,7 @@ impl State {
             lod_max_clamp: 0.0,
             compare: None,
             anisotropy_clamp: 1,
-            border_color: Some(wgpu::SamplerBorderColor::OpaqueWhite)
+            border_color: None
         });
 
         

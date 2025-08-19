@@ -1,8 +1,8 @@
 use winit::application::ApplicationHandler;
-use winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
-use winit::event::{ElementState, InnerSizeWriter, MouseScrollDelta, WindowEvent};
+use winit::dpi::{PhysicalPosition, PhysicalSize};
+use winit::event::{ElementState, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
-use winit::window::{Fullscreen, Window};
+use winit::window::Window;
 use std::sync::Arc;
 
 use crate::backend_admin::state::State;
@@ -154,7 +154,7 @@ impl ApplicationHandler<State> for App {
             },       
             WindowEvent::RedrawRequested => {
                 match state.render() {
-                    Ok(_) => {},
+                    Ok(_) => {state.window.request_redraw();},
                     Err(e) => {
                         println!("Unable to render {}", e);
                     }
