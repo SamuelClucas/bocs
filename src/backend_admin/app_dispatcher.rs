@@ -24,7 +24,7 @@ impl App  {
         App {
             state: None,
             proxy:  Some(fun()), // smuggle proxy into app using move closure for downstream requests
-            aspect_ratio: 16.0/9.0, // width/height,
+            aspect_ratio: 16.0 / 9.0, // width/height,
             size: None,
             minimum_size: PhysicalSize::new(740, 360), // 40x a_r
             maximum_size: None
