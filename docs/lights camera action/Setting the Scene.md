@@ -2,7 +2,9 @@
 I wanted to visually represent the app's design choices. These are abstract, high-level diagrams that should give some insight into the engine's functionality.  
 
 ### App window *as* the Near Plane  
-This is why I opted to fix the aspect ratio of the app's window on launch relative to the display in use. The window is the literal intersection plane into the simulation space, and its width and height will influence the camera's horizontal and vertical field-of-view. With this design, no matter how the window is resized (with tight aspect-ratio control), the 2D texture presented at each time step will be without distortion.  
+The window is the literal intersecting plane into the simulation space.  
+* Focal distance from camera to centre is height/2 * tan(90) = height/2.  
+* Horizontal scaling that preserves 90 degree vertical viewing angle is (width/2) / (height/2).  
 <img src="../../assets/Fig_1.png" alt="Window as near plane" width="400">
 
 ### Orbital Camera  
