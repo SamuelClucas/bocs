@@ -86,8 +86,8 @@ pub struct State {
 impl State {
     /// Determines dispatch dims on each render() 
     pub fn update_raygroup_ceil(&mut self, bounding_box: [i32; 4]) -> (u32, u32) {
-        let width = bounding_box[2] + bounding_box[0];  
-        let height = bounding_box[3] + bounding_box[1];
+        let width = bounding_box[2] - bounding_box[0];  
+        let height = bounding_box[3] - bounding_box[1];
         self.w_ceil = if width % self.raymarch_group == 0 { 0 }
             else { 1 };
         self.h_ceil = if height % self.raymarch_group == 0 { 0 } 
@@ -138,7 +138,7 @@ impl State {
 
         let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor{
             label: None,
-            required_features: wgpu::Features::default(), //wgpu::Features::POLYGON_MODE_LINE,
+            required_features: wgpu::Features::default() | wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER, //wgpu::Features::POLYGON_MODE_LINE,
             required_limits: wgpu::Limits::defaults(),
             trace: wgpu::Trace::Off,
             memory_hints: Default::default(),
@@ -167,7 +167,7 @@ impl State {
         
         let mut rng = rand::rng();
         let uniforms = Uniforms {
-            window_dims: [size.width, size.height, 0, 0],
+            window_dims: [size.width/2, size.height/2, 0, 0],
             dims: [dims.i as u32, dims.j as u32, dims.k as u32, (dims.i * dims.j) as u32],
             bounding_box: [0, 0, 0, 0], // set in render() 
             cam_pos: [camera.c[0], camera.c[1], camera.c[2], 0.0 as f32],
@@ -197,7 +197,7 @@ impl State {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING,
+            usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[wgpu::TextureFormat::Rgba8Unorm]
         });
 
@@ -240,8 +240,8 @@ impl State {
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Linear,
-            lod_min_clamp: 1.0,
-            lod_max_clamp: 1.0,
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 0.0,
             compare: None,
             anisotropy_clamp: 1,
             border_color: Some(wgpu::SamplerBorderColor::OpaqueWhite)
@@ -249,8 +249,8 @@ impl State {
 
         
         let render_bind_group_layout = BindGroupLayoutBuilder::new("Render Bind Group".to_string())
-                .with_sampled_texture(ShaderStages::FRAGMENT)
                 .with_sampler(ShaderStages::FRAGMENT)
+                .with_sampled_texture(ShaderStages::FRAGMENT)
                 .build(&device);
 
         let bind_group_descriptor = &wgpu::BindGroupDescriptor {
@@ -307,7 +307,7 @@ impl State {
             cache: None,
             compilation_options: PipelineCompilationOptions{
                 constants: &[],
-                zero_initialize_workgroup_memory: false 
+                zero_initialize_workgroup_memory: true
             }
         });
 
@@ -319,7 +319,7 @@ impl State {
             cache: None,
             compilation_options: PipelineCompilationOptions{
                 constants: &[],
-                zero_initialize_workgroup_memory: false 
+                zero_initialize_workgroup_memory: true 
             }
         });
          
@@ -331,7 +331,7 @@ impl State {
             cache: None,
             compilation_options: PipelineCompilationOptions{
                 constants: &[],
-                zero_initialize_workgroup_memory: false 
+                zero_initialize_workgroup_memory: true 
             }
         });
         
@@ -472,14 +472,15 @@ impl State {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        if width > 0 && height > 0 {
+        if width != self.surf_config.width || height != self.surf_config.height { 
+            println!("Resize called\n");
             self.surf_config.width = width;
             self.surf_config.height = height;
             self.camera.update(None, None, None, Some(&PhysicalSize {width, height}));
             self.surface.configure(&self.device, &self.surf_config);
             self.is_surface_configured = true;
-        }
-
+        
+        
         let storage_texture = 
             self.device.create_texture(&TextureDescriptor{
             label: Some("Storage Texture"),
@@ -492,7 +493,7 @@ impl State {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: TextureUsages::STORAGE_BINDING,
+            usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[wgpu::TextureFormat::Rgba8Unorm]
         });
         self.texture_view = storage_texture.create_view(&TextureViewDescriptor{
@@ -555,9 +556,8 @@ impl State {
                     resource: wgpu::BindingResource::TextureView(&self.texture_view)
                 }
             ]
-        }));
-        
-
+            }));
+        }
         }
 
     pub fn handle_key(&self, event_loop: &winit::event_loop::ActiveEventLoop, code: winit::keyboard::KeyCode, is_pressed: bool) {
@@ -572,19 +572,19 @@ impl State {
 
     pub fn render(&mut self, size: Option<PhysicalSize<u32>>) -> Result<(), wgpu::SurfaceError> {
         if let Some(size) = size {
-
             if! self.is_surface_configured {
                 self.resize(size.width, size.height); // reconfigs surface to match new size dims
             } 
-            let _ = self.window.request_inner_size(size);
+            //let _ = self.window.request_inner_size(size);
         }
         else {println!("No size passed to render\n") }
 
-        let size = self.window.inner_size();
+        //let size = self.window.inner_size();
 
         // Pixel into world units
-        let centre_top_d = size.height as f32 / 2.0; // 1:1 vertical pixels and up vector
-        let right_scale = size.width as f32 / 2.0 / centre_top_d; // garantees FOV 90 in vertical
+        let centre_top_d = self.surf_config.height as f32 / 2.0; // 1:1 vertical pixels and up vector
+        let right_scale = self.surf_config.width as f32 / 2.0 / centre_top_d; // garantees FOV 90 in vertical
+        println!("Right scale: {}", right_scale);
         let centre_right_d = centre_top_d * right_scale;
         
         let bounding_box = {
@@ -640,14 +640,14 @@ impl State {
         let now = std::time::Instant::now();
         let duration = ((now - self.time).as_secs_f32()).min(0.1666666); // stability bound for 3D euler integration
         let fps = 1.0 / duration;
-        println!("fps: {}\n", fps);
+        //println!("fps: {}\n", fps);
         self.time = now;
 
         self.read_a = if self.init_complete{ !self.read_a}
         else { self.read_a};
 
         let uniforms = Uniforms {
-            window_dims: [size.width/2, size.height/2, 0, 0],
+            window_dims: [self.surf_config.width/2, self.surf_config.height/2, 0, 0],
             dims: [self.dims.i as u32, self.dims.j as u32, self.dims.k as u32, (self.dims.i * self.dims.j) as u32],
             bounding_box: [bounding_box[0], bounding_box[1], bounding_box[2], bounding_box[3]],
             cam_pos: [self.camera.c[0], self.camera.c[1], self.camera.c[2], 0.0 as f32],
@@ -659,6 +659,7 @@ impl State {
             seed: [0.0, 0.0 as f32, 0.0 as f32, 0.0 as f32], // could later reintroduce seed here for hot sim resizing 
             flags: [self.read_a as u32, 0, 0, 0]
         };
+
         let uniforms = uniforms.flatten_u8();
         self.queue.write_buffer(self.uniform_buffer.as_ref().unwrap(), 0, uniforms);
 
@@ -693,6 +694,11 @@ impl State {
             compute_pass.set_pipeline(self.laplacian_pipeline.as_ref().unwrap());
             compute_pass.set_bind_group(0, self.uniforms_voxels_storagetexture.as_ref().unwrap(), &[]); 
             compute_pass.dispatch_workgroups((self.dims.i/8) + self.i_ceil, (self.dims.j/4) + self.j_ceil, (self.dims.k/8) + self.k_ceil);  // group size is 8 * 4 * 8 <= 256 (256, 256, 64 respective limits)
+            // Raymarch
+            compute_pass.set_pipeline(&self.raymarch_pipeline);
+            compute_pass.set_bind_group(0, self.uniforms_voxels_storagetexture.as_ref().unwrap(), &[]); 
+            let (dispatch_x, dispatch_y) = self.update_raygroup_ceil(bounding_box);
+            compute_pass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
             }
         }
         
@@ -720,7 +726,7 @@ impl State {
 
             render_pass.set_pipeline(self.pipeline.as_ref().unwrap());
             render_pass.set_bind_group(0, Some(self.render_bind_group.as_ref().unwrap()), &[]);
-            render_pass.draw(0..3, 0..1);
+            render_pass.draw(0..6, 0..1);
         } // encoder borrow dropped here
         
         // submit will accept anything that implements IntoIter

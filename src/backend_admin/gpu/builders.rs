@@ -21,7 +21,7 @@ impl BindGroupLayoutBuilder {
             binding: self.entries.len() as u32,
             visibility: visibility,
             ty: wgpu::BindingType::Texture { 
-                sample_type: TextureSampleType::Uint, 
+                sample_type: TextureSampleType::Float { filterable: true }, 
                 view_dimension: TextureViewDimension::D2, 
                 multisampled: false },
             count: None

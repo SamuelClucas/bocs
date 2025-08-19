@@ -13,9 +13,11 @@ use crate::backend_admin::state::State;
 pub struct App {
     state: Option<State>,
     proxy: Option<EventLoopProxy<State>>,
-    aspect_ratio: Option<f32>,
+    aspect_ratio: f32,
     size: Option<PhysicalSize<u32>>,
     scale_factor: Option<f64>,
+    minimum_size: PhysicalSize<u32>,
+    maximum_size: Option<PhysicalSize<u32>>
 }
 
 impl App  {
@@ -24,8 +26,10 @@ impl App  {
             scale_factor: None,
             state: None,
             proxy:  Some(fun()), // smuggle proxy into app using move closure for downstream requests
-            aspect_ratio: None,
-            size: None
+            aspect_ratio: 16.0/9.0, // width/height,
+            size: None,
+            minimum_size: PhysicalSize::new(320, 180), // 20x a_r
+            maximum_size: None
         }
     }}
 
@@ -36,39 +40,42 @@ impl ApplicationHandler<State> for App {
         let primary_monitor = event_loop.primary_monitor().expect("No primary monitor\n");
 
         let physical_dims = primary_monitor.size();
+        let max_physical_width = physical_dims.width as f32;
+        let max_physical_height = max_physical_width as f32 / self.aspect_ratio;
 
-        self.aspect_ratio = Some(physical_dims.width as f32 / physical_dims.height as f32);
-        let physical_width = physical_dims.width as f32;
-        let physical_height = physical_width as f32 / self.aspect_ratio.as_ref().expect("No aspect ratio in App on resumed()\n");
+        self.maximum_size = Some(winit::dpi::PhysicalSize::new(
+            max_physical_width as u32, 
+            max_physical_height as u32
+        ));
 
-        let scaled_size = winit::dpi::PhysicalSize::new(
-            physical_width as u32, 
-            physical_height as u32
-        );
-
-        self.size = Some(scaled_size);
+        self.size = self.maximum_size;
         
-        let time_step_width = primary_monitor.refresh_rate_millihertz()
+        let time_step_width = primary_monitor.refresh_rate_millihertz() // use later for vsync
         .map(|r| 1.0 / (r as f32 / 1000.0))
         .unwrap_or_else(|| {
             println!("Could not determine refresh rate, defaulting to 16.67ms timestep\n");
             1.0 / 60.0
         });
 
+        if let Some(size) = self.size {
         // window: logical representation of gpu output, managed by system os
-        let window_attributes = Window::default_attributes()
-                .with_title("📦")
-                .with_blur(true)
-                .with_inner_size(self.size.clone().expect("No size on window attributes creation\n"));
-
-        let window = Arc::new(event_loop.create_window(window_attributes).expect("\x1b[1;31mError creating window\x1b[0m\n"));
-        
-        // Need async context for requests
-        // hence using tokio::spawn task, use a user event proxy to inject awaits back into app
-        if let Some(prx) = self.proxy.take() {
-            let state = pollster::block_on(State::new(window.clone())).expect("Couldn't get state");
-            self.user_event(&event_loop,state);
-        } // end of setup: go to App::user_event() :)
+            let window_attributes = Window::default_attributes()
+                    .with_title("📦")
+                    .with_blur(true)
+                    .with_inner_size(size);
+            let window = Arc::new(event_loop
+                .create_window(window_attributes)
+                .expect("\x1b[1;31mError creating window\x1b[0m\n"));
+            window.set_min_inner_size(Some(self.minimum_size));
+            window.set_max_inner_size(self.maximum_size);
+            // Need async context for requests using pollset
+            // injected back into app through user event
+            if let Some(prx) = self.proxy.take() {
+                let state = pollster::block_on(State::new(window.clone())).expect("Couldn't get state");
+                self.user_event(&event_loop,state);
+            } // end of setup: go to App::user_event() :)
+        }
+        else { println!("Fail on resumed()\n"); }
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, mut event: State) {
@@ -148,23 +155,27 @@ impl ApplicationHandler<State> for App {
             // scale new size by aspect ratio constraint as in resume()
             WindowEvent::Resized(size) => {
                 if let Some(ar) = self.aspect_ratio {
+
+                    
                     if size.height != self.size.as_ref().unwrap().height {
                         let new_width= (size.height as f32 * ar)as u32;
                         self.size = Some(PhysicalSize::new(new_width, size.height));
                         state.is_surface_configured = false;
-                        state.window.request_redraw();
+                        state.resize(self.size.as_ref().unwrap().width, self.size.as_ref().unwrap().height);
+                
                     }
                     else { // catches all width adjustments
                         self.size = Some(PhysicalSize::new(size.width, (size.width as f32 / ar) as u32));
                         state.is_surface_configured = false;
-                        state.window.request_redraw();
+                        state.resize(self.size.as_ref().unwrap().width, self.size.as_ref().unwrap().height);
+
                     }
                 }
                 else { println!("No aspect ratio in resized yet\n"); }
             },       
             WindowEvent::RedrawRequested => {
                 match state.render(self.size ) {
-                    Ok(_) => {state.window.request_redraw()},
+                    Ok(_) => {},
                     Err(e) => {
                         println!("Unable to render {}", e);
                     }
