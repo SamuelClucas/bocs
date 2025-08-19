@@ -336,13 +336,12 @@ impl State {
         // END of COMPUTE //
 
         let surface_caps = surface.get_capabilities(&adapter);
-
         let surface_format = surface_caps.formats.iter()
             .find(|f| f.is_srgb())
             .copied()
             .unwrap_or(surface_caps.formats[0]);
 
-        let config = wgpu::SurfaceConfiguration {
+        let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
             width: size.width,
@@ -352,6 +351,7 @@ impl State {
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
+        surface.configure(&device, &surface_config);
          
         // TEXTURES //
         let fragment = device.create_shader_module(ShaderModuleDescriptor{
@@ -418,7 +418,7 @@ impl State {
                entry_point: Some("main"),
                compilation_options: wgpu::PipelineCompilationOptions::default(),
                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format, // format of surface
+                    format: surface_config.format, // format of surface
                     blend: Some(wgpu::BlendState::REPLACE), // replace old colour with new colour
                     write_mask: wgpu::ColorWrites::ALL // write to all channels
                })]
@@ -441,8 +441,8 @@ impl State {
                 init_pipeline: Some(init_pipeline),
                 laplacian_pipeline: Some(laplacian_pipeline),
                 pipeline: Some(render_pipeline),
-                surf_config: config,
-                is_surface_configured: false,
+                surf_config: surface_config,
+                is_surface_configured: true,
                 mouse_down: None,
                 camera: camera,
                 uniforms_voxels_storagetexture: Some(uniforms_voxels_storagetexture),
@@ -473,10 +473,9 @@ impl State {
             println!("Resize called\n");
             self.surf_config.width = width;
             self.surf_config.height = height;
-            self.camera.update(None, None, None, Some(&PhysicalSize {width, height}));
+            self.camera.update(None, None, None, Some(&PhysicalSize {width, height})); // TODO: REPLACE OPTIONS WITH ENUMS
             self.surface.configure(&self.device, &self.surf_config);
             self.is_surface_configured = true;
-        
         
         let storage_texture = 
             self.device.create_texture(&TextureDescriptor{
@@ -570,9 +569,8 @@ impl State {
     pub fn render(&mut self, size: Option<PhysicalSize<u32>>) -> Result<(), wgpu::SurfaceError> {
         if let Some(size) = size {
             if! self.is_surface_configured {
-                self.resize(size.width, size.height); // reconfigs surface to match new size dims
+                self.resize(size.width, size.height); // rebind max 16:9 texture for new window size
             } 
-            //let _ = self.window.request_inner_size(size);
         }
         else {println!("No size passed to render\n") }
 

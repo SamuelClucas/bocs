@@ -147,6 +147,7 @@ impl ApplicationHandler<State> for App {
             },
             WindowEvent::Resized(size) => {
                 self.size = Some(size);
+                state.is_surface_configured = false;
                 match size {
                     PhysicalSize{width, height: _} => {
                         let texture_height = (width as f32 / self.aspect_ratio) as u32;
