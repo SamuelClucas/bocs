@@ -71,7 +71,7 @@ impl ApplicationHandler<State> for App {
             // Need async context for requests using pollset
             // injected back into app through user event
             if let Some(prx) = self.proxy.take() {
-                let state = pollster::block_on(State::new(window.clone())).expect("Couldn't get state");
+                let state = pollster::block_on(State::new(window.clone(), size)).expect("Couldn't get state");
                 self.user_event(&event_loop,state);
             } // end of setup: go to App::user_event() :)
         }
@@ -79,14 +79,7 @@ impl ApplicationHandler<State> for App {
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, mut event: State) {
-
-
-            event.resize(
-                event.window.inner_size().width,
-                event.window.inner_size().height,
-            );
-
-            self.state = Some(event);
+        self.state = Some(event);
     }
     
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: winit::window::WindowId, event: WindowEvent) {
@@ -152,29 +145,16 @@ impl ApplicationHandler<State> for App {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             },
-            // scale new size by aspect ratio constraint as in resume()
             WindowEvent::Resized(size) => {
-                if let Some(ar) = self.aspect_ratio {
-
-                    
-                    if size.height != self.size.as_ref().unwrap().height {
-                        let new_width= (size.height as f32 * ar)as u32;
-                        self.size = Some(PhysicalSize::new(new_width, size.height));
-                        state.is_surface_configured = false;
-                        state.resize(self.size.as_ref().unwrap().width, self.size.as_ref().unwrap().height);
-                
-                    }
-                    else { // catches all width adjustments
-                        self.size = Some(PhysicalSize::new(size.width, (size.width as f32 / ar) as u32));
-                        state.is_surface_configured = false;
-                        state.resize(self.size.as_ref().unwrap().width, self.size.as_ref().unwrap().height);
-
-                    }
-                }
-                else { println!("No aspect ratio in resized yet\n"); }
+                self.size = Some(size);
+                match size {
+                    PhysicalSize{width, height: _} => {
+                        let texture_height = (width as f32 / self.aspect_ratio) as u32;
+                        state.resize(width, texture_height);
+                    }}
             },       
             WindowEvent::RedrawRequested => {
-                match state.render(self.size ) {
+                match state.render(self.size) {
                     Ok(_) => {},
                     Err(e) => {
                         println!("Unable to render {}", e);

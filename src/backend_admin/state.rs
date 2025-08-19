@@ -43,7 +43,6 @@ impl Uniforms {
     }
 }
 
-
 pub struct State {
     pub mouse_is_pressed: bool,
     pub mouse_down: Option<PhysicalPosition<f64>>,
@@ -98,9 +97,7 @@ impl State {
             ((height / self.raymarch_group) + self.h_ceil) as u32
         )
     }
-    pub async fn new(window: Arc<Window>) -> Result<Self> {
-        let size = window.inner_size();
-
+    pub async fn new(window: Arc<Window>, size: PhysicalSize<u32>) -> Result<Self> {
         let raymarch_group = 16;
         let w_ceil= 0; // updated on each pass in render()
         let h_ceil= 0;
