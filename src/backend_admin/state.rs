@@ -57,7 +57,7 @@ pub struct State {
     laplacian_pipeline: Option<ComputePipeline>,
     raymarch_pipeline: ComputePipeline,
 
-    uniforms_voxels_storagetexture: Option<BindGroup>,
+    resources: Option<BindGroup>,
     pub camera: OrbitalCamera,
     pipeline: Option<wgpu::RenderPipeline>,
     render_bind_group: Option<BindGroup>,
@@ -111,6 +111,7 @@ impl State {
         };
 
         let voxelgrid_vertices = VoxelVertices::centre_at_origin(&dims);
+
         let i_ceil = if dims.i % 8 == 0 { 0 }
         else { 1 };
         let j_ceil = if dims.j % 4 == 0 { 0 }
@@ -221,7 +222,7 @@ impl State {
             .with_storage_buffer(
                 ShaderStages::COMPUTE,
                 OffsetBehaviour::Static,
-                Access::ReadWrite)// no need to alternate read/write only on buffers a and b
+                Access::ReadWrite)
             .with_storage_texture(
                 ShaderStages::COMPUTE, 
                 TextureFormat::Rgba8Unorm, 
@@ -285,7 +286,7 @@ impl State {
         };
 
         // binding 1, assigned to index 0 in render
-        let uniforms_voxels_storagetexture = device.create_bind_group(bind_group_descriptor);
+        let resources = device.create_bind_group(bind_group_descriptor);
 
         // compute pipeline setup
         let compute_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -445,7 +446,7 @@ impl State {
                 is_surface_configured: true,
                 mouse_down: None,
                 camera: camera,
-                uniforms_voxels_storagetexture: Some(uniforms_voxels_storagetexture),
+                resources: Some(resources),
                 render_bind_group: Some(render_bind_group),
                 voxel_grid_buffer_a: Some(voxel_grid_buffer_a),
                 voxel_grid_buffer_b: Some(voxel_grid_buffer_b),
@@ -504,13 +505,24 @@ impl State {
             array_layer_count:None
         });
 
+        if let (Some(uniforms), 
+            Some(grid_a), 
+            Some(grid_b), 
+            Some(compute_bg_layout),
+            Some(render_bg_layout)) = (
+                &self.uniform_buffer, 
+                &self.voxel_grid_buffer_a, 
+                &self.voxel_grid_buffer_b, 
+                &self.compute_bind_group_layout,
+                &self.render_bind_group_layout) {
+
         let bind_group_descriptor = &wgpu::BindGroupDescriptor {
             label: Some("Bind group descriptor"),
-            layout: self.compute_bind_group_layout.as_ref().unwrap(),
+            layout: compute_bg_layout,
             entries: &[BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer(BufferBinding { 
-                    buffer: self.uniform_buffer.as_ref().unwrap(), 
+                    buffer: uniforms, 
                     offset: 0, 
                     size: NonZero::new((std::mem::size_of::<Uniforms>()) as u64)
                 }),
@@ -518,7 +530,7 @@ impl State {
             BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
-                    buffer:  self.voxel_grid_buffer_a.as_ref().unwrap(),
+                    buffer:  grid_a,
                     offset: 0,
                     size: NonZero::new((std::mem::size_of::<f32>() as u32 * self.dims.i * self.dims.j * self.dims.k) as u64)
             })
@@ -526,7 +538,7 @@ impl State {
             BindGroupEntry {
                 binding: 2,
                 resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
-                    buffer:  self.voxel_grid_buffer_b.as_ref().unwrap(),
+                    buffer:  grid_b,
                     offset: 0,
                     size: NonZero::new((std::mem::size_of::<f32>() as u32 * self.dims.i * self.dims.j * self.dims.k) as u64)
             })
@@ -538,11 +550,11 @@ impl State {
             ]
         };
 
-        self.uniforms_voxels_storagetexture = Some(self.device.create_bind_group(bind_group_descriptor));
+        self.resources = Some(self.device.create_bind_group(bind_group_descriptor));
  
         self.render_bind_group = Some(self.device.create_bind_group(&wgpu::BindGroupDescriptor{
             label: Some("Render Bind Group"),
-            layout: self.render_bind_group_layout.as_ref().unwrap(),
+            layout: render_bg_layout,
             entries: &[BindGroupEntry{
                 binding: 0,
                 resource: wgpu::BindingResource::Sampler(&self.sampler)},
@@ -554,6 +566,7 @@ impl State {
             ]
             }));
         }
+        self.window.request_redraw();
         }
 
     pub fn handle_key(&self, event_loop: &winit::event_loop::ActiveEventLoop, code: winit::keyboard::KeyCode, is_pressed: bool) {
@@ -566,16 +579,7 @@ impl State {
         }
     }
 
-    pub fn render(&mut self, size: Option<PhysicalSize<u32>>) -> Result<(), wgpu::SurfaceError> {
-        if let Some(size) = size {
-            if! self.is_surface_configured {
-                self.resize(size.width, size.height); // rebind max 16:9 texture for new window size
-            } 
-        }
-        else {println!("No size passed to render\n") }
-
-        //let size = self.window.inner_size();
-
+    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         // Pixel into world units
         let centre_top_d = self.surf_config.height as f32 / 2.0; // 1:1 vertical pixels and up vector
         let right_scale = self.surf_config.width as f32 / 2.0 / centre_top_d; // garantees FOV 90 in vertical

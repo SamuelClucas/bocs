@@ -155,7 +155,7 @@ impl ApplicationHandler<State> for App {
                     }}
             },       
             WindowEvent::RedrawRequested => {
-                match state.render(self.size) {
+                match state.render() {
                     Ok(_) => {},
                     Err(e) => {
                         println!("Unable to render {}", e);
