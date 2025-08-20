@@ -12,4 +12,4 @@ It achieves this by combining:
 - enums.rs – Core configuration enums (StorageTex, BufferAccess, UniformUsage, …).
     - These form the vocabulary for describing resource and pipeline properties.
 - builders.rs – Builder types (BindGroupLayoutBuilder, PipelineBuilder, etc.) that accept enums, accumulate state, and produce WGPU objects.
-- init.rs – Adapter, device, and surface selection. Surface format/present mode configuration.
+- traits.rs - Pipeline trait declaration for shared Compute/Render behaviour.

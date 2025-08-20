@@ -81,7 +81,7 @@ impl ApplicationHandler<State> for App {
     }
     
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: winit::window::WindowId, event: WindowEvent) {
-        let state = match &mut self.state {
+        let state_ = match &mut self.state {
             Some(s) => s,
             None => return
         };
@@ -90,47 +90,39 @@ impl ApplicationHandler<State> for App {
             WindowEvent::MouseInput { device_id, state, button } => {
                 match state {
                     ElementState::Pressed => {
-                        self.state.as_mut().unwrap().mouse_is_pressed = true;
+                        state_.mouse_is_pressed = true;
                     },
                     ElementState::Released => {
-                        if let Some(state) = self.state.as_mut(){
-                            state.mouse_is_pressed = false;
-                            state.mouse_down = None;
-                        }
-                        else {println!("No state at mouse input\n");}
+                        state_.mouse_is_pressed = false;
+                        state_.mouse_down = None;
                     }
                 }
             },
             WindowEvent::CursorMoved { device_id: _device_id, position } => {
-                if let Some(state) = self.state.as_mut(){
-                    if state.mouse_is_pressed == true {
-                        if let Some(mouse_down) = state.mouse_down{
+                    if state_.mouse_is_pressed == true {
+                        if let Some(mouse_down) = state_.mouse_down{
                             let delta = PhysicalPosition {
                                 x: position.x - mouse_down.x,
                                 y: position.y - mouse_down.y
                             };
                             // handle cursor move here
-                            state.camera.update(Some(delta.x as f32), Some(delta.y as f32), None, None);
-                            state.mouse_down = Some(position);
+                            state_.camera.update(Some(delta.x as f32), Some(delta.y as f32), None, None);
+                            state_.mouse_down = Some(position);
                         }
                         else {
-                            state.mouse_down = Some(position);
+                            state_.mouse_down = Some(position);
                         }
                     }
-                }
-                else {println!("No state at cursor moved\n");}
-            },
+                },
             WindowEvent::MouseWheel { device_id: _device_id, delta, phase: _phase } => {
-                if let Some(state) = self.state.as_mut() {
                     match delta {
                         MouseScrollDelta::PixelDelta(pos) => {
-                            state.camera.update(None, None, Some(pos.y as f32), None);
+                            state_.camera.update(None, None, Some(pos.y as f32), None);
                         },
                         MouseScrollDelta::LineDelta(x, y) => {
-                            state.camera.update(None, None, Some(y as f32), None);
+                            state_.camera.update(None, None, Some(y as f32), None);
                         }
                     }
-                }
             },
             WindowEvent::KeyboardInput {
                 event: winit::event::KeyEvent {
@@ -138,23 +130,23 @@ impl ApplicationHandler<State> for App {
                         state: key_state, 
                         ..},
                 ..} => {
-                    state.handle_key(&event_loop, code, key_state.is_pressed()) // self.state, not KeyEvent::state
+                    state_.handle_key(&event_loop, code, key_state.is_pressed()) // self.state, not KeyEvent::state
             },
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             },
             WindowEvent::Resized(size) => {
                 self.size = Some(size);
-                state.is_surface_configured = false;
+                state_.is_surface_configured = false;
                 match size {
                     PhysicalSize{width, height: _} => {
                         let texture_height = (width as f32 / self.aspect_ratio) as u32;
-                        state.resize(width, texture_height);
+                        state_.resize(width, texture_height);
                     }}
             },       
             WindowEvent::RedrawRequested => {
-                match state.render() {
-                    Ok(_) => {state.window.request_redraw();},
+                match state_.render() {
+                    Ok(_) => {state_.window.request_redraw();},
                     Err(e) => {
                         println!("Unable to render {}", e);
                     }
