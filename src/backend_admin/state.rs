@@ -1,10 +1,13 @@
 use winit::{dpi::{PhysicalPosition, PhysicalSize}, window::Window};
 use core::f32;
 use std::{num::NonZero, sync::Arc};
-use crate::{world::{camera::OrbitalCamera, voxel_grid::*}, 
-    backend_admin::gpu::{enums::{Access, 
-                                OffsetBehaviour}, 
-                        builders::{BindGroupLayoutBuilder}}};
+use crate::{
+    world::{camera::OrbitalCamera, voxel_grid::*}, 
+    backend_admin::gpu::{
+        enums::{Access, OffsetBehaviour}, 
+        builders::{BindGroupLayoutBuilder},
+        gfx_context::GraphicsContext}
+    };
 use anyhow::{Result};
 use wgpu::{util::DeviceExt, wgt::TextureDescriptor, BindGroup, BindGroupEntry, BindGroupLayout, BufferBinding, BufferUsages, ComputePipeline, Extent3d, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
 use rand::prelude::*;
@@ -44,6 +47,7 @@ impl Uniforms {
 }
 
 pub struct State {
+    gfx_context: GraphicsContext,
     pub mouse_is_pressed: bool,
     pub mouse_down: Option<PhysicalPosition<f64>>,
     pub window: Arc<Window>,
@@ -93,6 +97,8 @@ impl State {
         )
     }
     pub async fn new(window: Arc<Window>, size: PhysicalSize<u32>) -> Result<Self> {
+        let gfx_context = GraphicsContext::new(window).await?;
+
         let raymarch_group = 16;
         let w_ceil= 0; // updated on each pass in render()
         let h_ceil= 0;
@@ -113,9 +119,6 @@ impl State {
         else { 1 };
         let k_ceil = if dims.k % 8 == 0 { 0 }
         else { 1};
-
-        
-
 
         
 
@@ -392,6 +395,7 @@ impl State {
 
         Ok (
             Self { 
+                gfx_context: gfx_context,
                 i_ceil: i_ceil,
                 j_ceil: j_ceil,
                 k_ceil: k_ceil,

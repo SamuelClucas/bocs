@@ -7,4 +7,6 @@ pub trait Pipeline {
 
     fn create_bind_group(&mut self, rscs: &Resources, ctx: &GraphicsContext);
 
+    fn add_shader(&mut self, rscs: &Resources, ctx: &GraphicsContext);
+
 }
