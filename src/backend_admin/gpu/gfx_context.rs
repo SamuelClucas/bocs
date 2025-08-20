@@ -1,6 +1,6 @@
-use std::{sync::Arc};
+use std::{path, sync::Arc};
 use winit::window::Window;
-use wgpu::{SurfaceConfiguration, Adapter, Device, Instance, Queue, Surface};
+use wgpu::{Adapter, Device, Instance, Queue, ShaderModule, Surface, SurfaceConfiguration};
 use anyhow::Result;
 
 pub struct GraphicsContext {
@@ -8,7 +8,7 @@ pub struct GraphicsContext {
     instance: Option<Instance>,
     adapter: Option<Adapter>,
     surface: Option<Surface<'static>>,
-    device: Option<Device>,
+    pub device: Option<Device>,
     queue: Option<Queue>,
     surface_config: Option<SurfaceConfiguration>,
     surface_configured: bool
@@ -71,4 +71,6 @@ impl GraphicsContext {
             }
         )
     }
+
+
 }
