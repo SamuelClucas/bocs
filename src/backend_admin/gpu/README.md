@@ -13,3 +13,5 @@ It achieves this by combining:
     - These form the vocabulary for describing resource and pipeline properties.
 - builders.rs – Builder types (BindGroupLayoutBuilder, PipelineBuilder, etc.) that accept enums, accumulate state, and produce WGPU objects.
 - traits.rs - Pipeline trait declaration for shared Compute/Render behaviour.
+- resources.rs - defines the Resource struct responsible for managing bind group resources.
+- gfx_context.rs - defines the GraphicsContext struct responsible for managing wgpu handles to like `Device`.
