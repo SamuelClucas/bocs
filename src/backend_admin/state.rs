@@ -47,11 +47,6 @@ pub struct State {
     pub mouse_is_pressed: bool,
     pub mouse_down: Option<PhysicalPosition<f64>>,
     pub window: Arc<Window>,
-    surface: wgpu::Surface<'static>,
-    surf_config: wgpu::SurfaceConfiguration,
-    pub is_surface_configured: bool,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
 
     init_pipeline: Option<ComputePipeline>,
     laplacian_pipeline: Option<ComputePipeline>,
@@ -119,28 +114,10 @@ impl State {
         let k_ceil = if dims.k % 8 == 0 { 0 }
         else { 1};
 
-        // Instance == handle to GPU
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
-            ..Default::default()
-        });
+        
 
-        // Surface == handle to window (GPU output)
-        let surface = instance.create_surface(window.clone())?; // clone here otherwise surface takes ownership of window
 
-        let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::default(),
-            compatible_surface: Some(&surface),
-            force_fallback_adapter: false
-        }).await?;
-
-        let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor{
-            label: None,
-            required_features: wgpu::Features::default(), //wgpu::Features::POLYGON_MODE_LINE,
-            required_limits: wgpu::Limits::defaults(),
-            trace: wgpu::Trace::Off,
-            memory_hints: Default::default(),
-        }).await?;
+        
 
         // COMPUTE //
         let init = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -336,23 +313,7 @@ impl State {
        
         // END of COMPUTE //
 
-        let surface_caps = surface.get_capabilities(&adapter);
-        let surface_format = surface_caps.formats.iter()
-            .find(|f| f.is_srgb())
-            .copied()
-            .unwrap_or(surface_caps.formats[0]);
-
-        let surface_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface_format,
-            width: size.width,
-            height: size.height,
-            present_mode: surface_caps.present_modes[0],
-            alpha_mode: surface_caps.alpha_modes[0],
-            view_formats: vec![],
-            desired_maximum_frame_latency: 2,
-        };
-        surface.configure(&device, &surface_config);
+        
          
         // TEXTURES //
         let fragment = device.create_shader_module(ShaderModuleDescriptor{

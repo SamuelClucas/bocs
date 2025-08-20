@@ -1,5 +1,10 @@
+use crate::backend_admin::gpu::{gfx_context::GraphicsContext, resources::Resources};
+
 pub trait Pipeline {
-    fn update_bindings(&mut self, rscs: &Resources, ctx: &GraphicsContext) {
-        
-    }
+    fn on_resize(&mut self, rscs: &Resources, ctx: &GraphicsContext);
+
+    fn create_bind_group_layout(&mut self, rscs: &Resources, ctx: &GraphicsContext);
+
+    fn create_bind_group(&mut self, rscs: &Resources, ctx: &GraphicsContext);
+
 }
