@@ -1,21 +1,25 @@
-use std::{path, sync::Arc};
-use winit::window::Window;
-use wgpu::{Adapter, Device, Instance, Queue, ShaderModule, Surface, SurfaceConfiguration};
+use std::{sync::Arc};
+use winit::{
+    dpi::PhysicalSize,
+    window::Window};
+use wgpu::{Adapter, Device, Instance, Queue, Surface, SurfaceConfiguration};
 use anyhow::Result;
+use std::error::Error;
 
 pub struct GraphicsContext {
     window: Arc<Window>,
-    instance: Option<Instance>,
-    adapter: Option<Adapter>,
-    surface: Option<Surface<'static>>,
-    pub device: Option<Device>,
-    queue: Option<Queue>,
-    surface_config: Option<SurfaceConfiguration>,
-    surface_configured: bool
+    size: PhysicalSize<u32>,
+    instance: Instance,
+    adapter: Adapter,
+    surface: Surface<'static>,
+    pub device: Device,
+    queue: Queue,
+    pub surface_config: SurfaceConfiguration,
+    pub surface_configured: bool
 }
 
 impl GraphicsContext {
-    pub async fn new(win: Arc<Window>) -> Result<Self> {
+    pub async fn new(win: Arc<Window>) -> Result<Self, Box<dyn Error>> {
         // Instance == handle to GPU
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
@@ -61,15 +65,47 @@ impl GraphicsContext {
         Ok (
             GraphicsContext {
                 window: win,
-                instance: Some(instance),
-                adapter: Some(adapter),
-                surface: Some(surface),
-                device: Some(device),
-                queue: Some(queue),
-                surface_config: Some(surface_config),
+                size: size,
+                instance: instance,
+                adapter: adapter,
+                surface: surface,
+                device: device,
+                queue: queue,
+                surface_config: surface_config,
                 surface_configured: true
             }
         )
+    }
+
+    pub fn update_surface_config(&mut self) -> Result<PhysicalSize<u32>, Error> {
+        let (surf, adapter, device) = match &mut(self.surface, self.adapter) {
+            (Some(s), Some(a)) => (s, a),
+            (Some(s), None) => return,
+            (None, Some(a)) => return,
+            (None, None) => return 
+        };
+
+        let surface_caps = surf.get_capabilities(adapter);
+
+        let surface_format = surface_caps.formats.iter()
+            .find(|f| f.is_srgb())
+            .copied()
+            .unwrap_or(surface_caps.formats[0]);
+
+        let size = self.window.inner_size();
+
+        self.surface_config = Some(wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: size.width,
+            height: size.height,
+            present_mode: surface_caps.present_modes[0],
+            alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        });
+        surf.configure(&device, &surface_config);
+
     }
 
 

@@ -142,7 +142,7 @@ impl OrbitalCamera {
         // f* kf = centre of near plane
         // near-plane edges = (k * kf) +- (max(width, height) * r or u) (r for horizontal, u for vertical)
         // this gives directions for any x, y pixel
-        let kf = (size.width.max(size.height)) as f32 / 2.0; // fixes 90 FOV in larger dimension, given tan(pi/2) = 1
+        let kf = (size.width.min(size.height)) as f32 / 2.0; // fixes 90 FOV in smaller dimension, given tan(pi/2) = 1
         let centre = OrbitalCamera::scale(forward.clone(), kf);
 
         // at first, let up be 1 unit in j direction

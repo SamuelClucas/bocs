@@ -3,9 +3,9 @@ use crate::backend_admin::gpu::gfx_context::GraphicsContext;
 use anyhow::Result;
 
 pub struct Compute{
-    init: ShaderModule,
-    laplacian: ShaderModule,
-    raymarch: ShaderModule
+    init_shader: ShaderModule,
+    laplacian_shader: ShaderModule,
+    raymarch_shader: ShaderModule
     
 }
 
@@ -31,9 +31,9 @@ impl Compute {
         
         Some(
             Compute {
-                init: init,
-                laplacian: laplacian,
-                raymarch: raymarch
+                init_shader: init,
+                laplacian_shader: laplacian,
+                raymarch_shader: raymarch
             }
         )
     }
