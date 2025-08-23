@@ -15,7 +15,7 @@ use crate::backend_admin::{state::State, app_dispatcher::App} ;
 async fn main() -> Result<(), Box<dyn Error>> { // see async  
     // The EventLoop interfaces with the OS 
     // Tracking WindowEvent and DeviceEvent events...
-    let event_loop = EventLoop::<State>::with_user_event().build().unwrap(); // not an active event loop
+    let event_loop = EventLoop::<State>::with_user_event().build()?; // not an active event loop
     let proxy = event_loop.create_proxy(); // used to inject awaited requests back into App
 
     // ControlFlow::Poll continuously runs the event loop (through Application Handler in App), even if the OS hasn't dispatched any events. 

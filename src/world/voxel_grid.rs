@@ -1,96 +1,310 @@
+/// Rust-side representation of Voxel Grid
+/// naming convention agnostic -
+/// not ijk, xyz, can be anything -
+/// hence d1, d2, d3_size represents size of voxelgrid
+/// in that dimension (i.e., [0], [1], [2])
+/// The invariant: always 3D - 'voxel' as 'volumetric pixel'
+const DIMS: usize = 3; 
+const PROJ_DIMS: usize = 2; // projection onto 2D surface
 
-pub struct VoxelDims {
-    pub i: u32,
-    pub j: u32,
-    pub k: u32,
-}
+pub type P3 = [f32; DIMS]; // 3D point
+pub type P2 = [f32; PROJ_DIMS]; // 2D Point
 
-pub struct VoxelVertices {
-    pub world_vertices: [f32; 3 * 8],
-    pub ruf_vertices: [f32; 3 * 8],
-    pub onto_plane: [f32; 2 * 8]
-}
-#[derive(Copy, Clone)]
+/// Enum for each coordinate system,
+/// Carries point as P3 or P2 and is 
+/// returned from VoxelGrid::get_vertex_at() but is 
+/// passed as an arg to VoxelGrid::set_vertex_at()
+/// ensuring basis transforms are always explicit and visible
+#[derive(Debug, Copy, Clone)]
 pub enum SystemSet{
-    WORLD([f32;3]),
-    RUF([f32;3]),
-    PLANE([f32;2]),
+    WORLD(P3),
+    RUF(P3),
+    SQUARE(P2),
 }
-#[derive(Copy, Clone)]
+/// Enum for each coordinate system,
+/// same as SystemSet but with only an index payload for getting vertices
+/// useful to keep code explicit
+#[derive(Debug, Copy, Clone)]
 pub enum SystemGet{
-    WORLD,
-    RUF,
-    PLANE,
+    WORLD(usize),
+    RUF(usize),
+    SQUARE(usize),
 }
 
-impl VoxelVertices {
-    pub fn  centre_at_origin(dims: &VoxelDims) -> Self {
-        let i = (dims.i as f32) / 2.0;
-        let j = (dims.j as f32) / 2.0;
-        let k = (dims.k as f32) / 2.0;
+/// All world geometries implement the Access trait
+/// This includes Square, Cuboid, and VoxelGrid itself
+/// I, O generics represent inputs or outputs (either P2s or P3s, or usize) for 'setting' or 'getting' 
+pub trait Access<I, O> { 
+    fn set_vertex_at(&mut self, a: I, b: O);
+    fn get_vertex_at(& self, a: I) -> O; 
+}
 
-        // rh coordinates looking down k,-ijk first (i major, k minor), bottom left, counterclockwise
+/// Recommend sticking to CCW or CW when ordering vertices for a face
+/// For example, 
+/// p1: bottom left
+/// p2: top left
+/// p3: top right
+/// p4: bottom right
+/// when looking down the first basis vector of your coordinate system (e.g., ijk, i going into the screen)
+#[derive(Debug, Copy, Clone)]
+struct Square {
+    p1: P2,
+    p2: P2,
+    p3: P2,
+    p4: P2,
+}
+/// Purely geometric Square
+/// Implements Access trait
+impl Default for Square {
+    fn default() -> Self {
+        Square {
+            p1: [0.0, 0.0],
+            p2: [0.0, 0.0],
+            p3: [0.0, 0.0],
+            p4: [0.0, 0.0],
+        }
+    }
+}
+impl Access<usize, P2> for Square {
+    /// Getter for purely geometric Square vertices (P2s)
+    fn get_vertex_at(&self, idx: usize) -> P2 {
+        if idx > 4 || idx < 0 { panic!("Out of bounds Square vertex access attempt. Vertex index should be <= 3 and >= 0.\n") } // OOB attempts are unrecoverable errors
+         else {
+            match idx {
+            0 => self.p1,
+            1 => self.p2,
+            2 => self.p3,
+            3 => self.p4,
+            _ => panic!("Strange index for Square::at_vertex() call.\n")
+            }
+        }
+    }
+    /// Setter for purely geometric Square vertices (P2s)
+    fn set_vertex_at(&mut self, idx: usize, point: P2) {
+        if idx > 4 || idx < 0 { panic!("Out of bounds Square vertex access attempt. Vertex index should be <= 3 and >= 0.\n") } // OOB attempts are unrecoverable errors
+        else {
+            match idx {
+            0 => self.p1 = point,
+            1 => self.p2 = point,
+            2 => self.p3 = point,
+            3 => self.p4 = point,
+            _ => panic!("Strange index for Square::get_vertex_at() call.\n")
+        }
+    }}
+}
+
+/// This is distinct from Square, where each vertex is P3 type
+/// Still, CuboidFace is purely geometric and is not concerned with 
+/// coordinate systems
+/// Implements Access
+#[derive(Debug, Copy, Clone)]
+pub struct CuboidFace {
+    p1: P3,
+    p2: P3,
+    p3: P3,
+    p4: P3
+}
+impl Default for CuboidFace {
+    fn default() -> Self {
+        CuboidFace {
+            p1: [0.0, 0.0, 0.0],
+            p2: [0.0, 0.0, 0.0],
+            p3: [0.0, 0.0, 0.0],
+            p4: [0.0, 0.0, 0.0]
+        }
+    }
+}
+
+impl Access<usize, P3> for CuboidFace {
+    fn get_vertex_at(& self, idx: usize) -> P3 {
+        assert!(idx < 4 || idx >= 0);
+         match idx {
+            0 => self.p1,
+            1 => self.p2,
+            2 => self.p3,
+            3 => self.p4,
+            _ => panic!("Strange index for CuboidFace::get_vertex_at() call.\n")
+            }
+    }
+    fn set_vertex_at(&mut self, idx: usize, point: P3) {
+        assert!(idx < 4 || idx >= 0);
+        match idx {
+            0 => self.p1 = point,
+            1 => self.p2 = point,
+            2 => self.p3 = point,
+            3 => self.p4 = point,
+            _ => panic!("Strange index for CuboidFace::get_vertex_at() call.\n")
+            }
+    }
+}
+/// Cuboid is a purely geometric object with useful helpers
+/// Not to be confused with the VoxelGrid, which is indeed a Cuboid
+/// but is sufficiently distinct in its role as a container
+/// for simulation, hence it is its own struct with additional data and methods and uses System enums
+/// See their shared trait "Access"
+#[derive(Debug, Copy, Clone)]
+pub struct Cuboid {
+    f1: CuboidFace,
+    f2: CuboidFace
+}
+
+impl Default for Cuboid {
+    fn default()-> Self {
+        Cuboid {
+            f1: CuboidFace::default(),
+            f2: CuboidFace::default()
+        }
+    }
+}
+
+impl Access<usize, P3> for Cuboid {
+    fn get_vertex_at(&self, idx: usize) -> P3 {
+        if idx > 7 || idx < 0{ panic!("Out of bounds cuboid vertex access attempt. Vertex index should be <= 7.\n") } // OOB attempts are unrecoverable errors
+        else {
+            match idx {
+            0 => self.f1.p1,
+            1 => self.f1.p2,
+            2 => self.f1.p3,
+            3 => self.f1.p4,
+            4 => self.f2.p1,
+            5 => self.f2.p2,
+            6 => self.f2.p3,
+            7 => self.f2.p4,
+            _ => panic!("Strange index for Cuboid::get_vertex_at() call.\n")
+            }
+        }
+    }
+    fn set_vertex_at(&mut self, idx: usize, point: P3) {
+        assert!(idx < 8 && idx >= 0);
+        match idx {
+            0 => self.f1.p1 = point,
+            1 => self.f1.p2 = point,
+            2 => self.f1.p3 = point,
+            3 => self.f1.p4 = point,
+            4 => self.f2.p1 = point,
+            5 => self.f2.p2 = point,
+            6 => self.f2.p3 = point,
+            7 => self.f2.p4 = point,
+            _ => panic!("Strange index for Cuboid::set_vertex_at() call.\n")
+        };
+    }
+}
+
+/// I chose to keep Camera and VoxelGrid totally separately
+/// in future I may implement a builder that takes a Camera instance 
+/// this way ruf_cuboid can be populated and ruf_is_stale is false
+#[derive(Debug, Copy, Clone)]
+pub struct VoxelGrid {
+    pub d1_size: f32,
+    pub d2_size: f32,
+    pub d3_size: f32,
+
+    pub ruf_is_stale: bool, // triggered on any change to VoxelGrid or Camera
+
+    pub world_cuboid: Cuboid, // vertices of voxel grid in worldspace
+
+    pub ruf_cuboid: Cuboid, // vertices of voxel grid in camera basis vectors Right, Up, Forward
+
+    pub onto_plane: [Square; 2] // 8 3D vertices -> 8 2D vertices is 2 Squares, distinct from CuboidFace (which uses P3s)
+}
+
+/// World coordinates are always P3, but...
+/// may be expressed in terms of ijk or
+/// RUF... or any coord system
+/// I enforce enum usage for clarity later on
+/// VoxelGrid is not purely geometric - the coordinate system matters for simulation
+/// and visualisation logic
+impl VoxelGrid {
+    pub fn new_centered_at_origin(dims: &[f32; 3]) -> Self {
+        let [d1_size, d2_size, d3_size]= *dims;
+        let (d1_offset, d2_offset, d3_offset) = (d1_size/2.0, d2_size/2.0, d3_size/2.0);
+
+        let p1 = [-d1_offset, -d2_offset, -d3_offset];
+        let p2 = [-d1_offset, d2_offset, -d3_offset];
+        let p3 = [d1_offset, d2_offset, -d3_offset];
+        let p4 = [d1_offset, -d2_offset, -d3_offset];
+
+        let near_face = CuboidFace {
+            p1: p1,
+            p2: p2,
+            p3: p3,
+            p4: p4
+        };
+
+        let p5 = [-d1_offset, -d2_offset, d3_offset];
+        let p6 = [-d1_offset, d2_offset, d3_offset];
+        let p7 = [d1_offset, d2_offset, d3_offset];
+        let p8 = [d1_offset, -d2_offset, d3_offset];
+
+        let far_face = CuboidFace {
+            p1: p5,
+            p2: p6,
+            p3: p7,
+            p4: p8
+        };
+
+        // FOR EXAMPLE - rh coordinates looking down k,-ijk first (i major, k minor), bottom left, counterclockwise 
         Self {
-            world_vertices: [
-            -i, -j, -k, 
-            -i, j, -k, 
-            i, j, -k,
-            i, -j, -k, // face in -k ij plane 
+            d1_size: d1_size,
+            d2_size: d2_size,
+            d3_size: d3_size,
 
-            -i, -j, k,
-            -i, j, k,
-            i, j, k,
-            i, -j, k],    // face in k ij plane
-            ruf_vertices: [0.0; 3*8],
-            onto_plane: [0.0; 2*8]
+            world_cuboid: Cuboid {
+                f1: near_face, // centered at origin using offsets
+                f2: far_face 
+            },
+
+            ruf_is_stale: true, // always true on creation
+
+            // populated later 
+            ruf_cuboid: Cuboid::default(),
+
+            onto_plane: [Square::default(); 2] // 2D PROJECTION
         }
     }    
+}
+
+impl Access<SystemGet, SystemSet> for VoxelGrid {
     /// 0-indexed vertices 0-7
-    pub fn get_point(&self, point: usize, specifier: SystemGet) -> SystemSet {
+     fn get_vertex_at(&self, specifier: SystemGet) -> SystemSet { // can return P3 or P2, so using SystemSet variants
         match specifier {
-            SystemGet::WORLD => {
-                assert!(point <= 7);
-                SystemSet::WORLD([self.world_vertices[point * 3], 
-                self.world_vertices[(point * 3) as usize + 1], 
-                self.world_vertices[(point * 3) as usize + 2]
-                ])
+            SystemGet::WORLD(vertex) => {
+                assert!(vertex < 8 && vertex >= 0);
+                SystemSet::WORLD(self.world_cuboid.get_vertex_at(vertex))
             },
-            SystemGet::RUF => {
-                assert!(point <= 7);
-                SystemSet::RUF([self.ruf_vertices[point * 3], 
-                self.ruf_vertices[(point * 3) + 1], 
-                self.ruf_vertices[(point * 3) + 2]
-                ])
+            SystemGet::RUF(vertex) => {
+                assert!(vertex < 8 && vertex >= 0);
+                SystemSet::RUF(self.ruf_cuboid.get_vertex_at(vertex))
             },
-            SystemGet::PLANE => {
-                assert!(point <= 7);
-                SystemSet::PLANE([self.onto_plane[point * 2], 
-                self.onto_plane[(point * 2) + 1] 
-                ])
+            SystemGet::SQUARE(vertex) => {
+                assert!(vertex < 8 && vertex >= 0); //  still bound at 7
+                let face = vertex / 4; // always floored, so 0 or 1
+                let rem = vertex % 4; // always 0, 1, 2 or 3
+                SystemSet::SQUARE(self.onto_plane[face].get_vertex_at(rem), 
+                )
             },
         }   
     }
+    /// Handy to enforce that SystemGet and SystemSet are the same for a given call to VoxelGrid::set_vertex_at
+    fn set_vertex_at(&mut self, idx: SystemGet, specifier: SystemSet) {
 
-    pub fn set_point(&mut self, point: usize, specifier: SystemSet){
-        match specifier {
-            SystemSet::WORLD(slice) => {
-                assert!(point <= 7);
-                self.world_vertices[point * 3] = slice[0];
-                self.world_vertices[(point * 3) + 1] = slice[1];
-                self.world_vertices[(point * 3) + 2] = slice[2];
-                
+        match (idx, specifier) {
+            (SystemGet::WORLD(idx),SystemSet::WORLD(point)) => {
+                assert!(idx < 8 && idx >= 0);
+                self.world_cuboid.set_vertex_at(idx, point);
             },
-            SystemSet::RUF(slice) => {
-                assert!(point <= 7);
-                self.ruf_vertices[point * 3] = slice[0];
-                self.ruf_vertices[(point * 3) + 1] = slice[1];
-                self.ruf_vertices[(point * 3) + 2] = slice[2];
+            (SystemGet::RUF(idx),SystemSet::RUF(point)) => {
+                assert!(idx < 8 && idx >= 0);
+                self.ruf_cuboid.set_vertex_at(idx, point);
             },
-            SystemSet::PLANE(slice) => {
-                assert!(point <= 7);
-                self.onto_plane[point * 2] = slice[0];
-                self.onto_plane[(point * 2) + 1] = slice[1];
+            (SystemGet::SQUARE(idx),SystemSet::SQUARE(point)) => {
+                assert!(idx < 8 && idx >= 0);
+                let face = idx / 4; // always floored, so 0 or 1
+                let rem = idx % 4; // always 0, 1, 2 or 3
+                self.onto_plane[face].set_vertex_at(rem, point);
             },
+            _ => panic!("SystemGet and SystemSet are for different coordinate systems. Is this a mistake?\n")
         }
     }
+
 }
