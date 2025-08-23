@@ -117,7 +117,7 @@ impl Default for CuboidFace {
 
 impl Access<usize, P3> for CuboidFace {
     fn get_vertex_at(& self, idx: usize) -> P3 {
-        assert!(idx < 4 || idx >= 0);
+        assert!(idx < 4 && idx >= 0);
          match idx {
             0 => self.p1,
             1 => self.p2,
@@ -127,7 +127,7 @@ impl Access<usize, P3> for CuboidFace {
             }
     }
     fn set_vertex_at(&mut self, idx: usize, point: P3) {
-        assert!(idx < 4 || idx >= 0);
+        assert!(idx < 4 && idx >= 0);
         match idx {
             0 => self.p1 = point,
             1 => self.p2 = point,
