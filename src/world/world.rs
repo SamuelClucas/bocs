@@ -1,4 +1,4 @@
-use crate::{backend_admin::gpu::gfx_context::GraphicsContext, world::{camera::OrbitalCamera, voxel_grid::{Cuboid, VoxelGrid, Dims, P3}}};
+use crate::{backend_admin::gpu::gfx_context::GraphicsContext, world::{camera::OrbitalCamera, voxel_grid::{Cuboid, VoxelGrid, Dims3, P3}}};
 
 /// Manages all World entities
 pub struct World {
@@ -8,7 +8,7 @@ pub struct World {
 }
 
 impl World {
-    fn new(d: Dims, gfx_ctx: &GraphicsContext) -> Self {
+    pub fn new(d: Dims3, gfx_ctx: &GraphicsContext) -> Self {
         assert!(d[0] > 0 && d[1] > 0 && d[2] > 0);
         let cam_init: P3 = [d[0] * 2.0, 0.0, 0.0];
         World {

@@ -8,7 +8,7 @@ const DIMS: usize = 3;
 const PROJ_DIMS: usize = 2; // projection onto 2D surface
 
 pub type P3 = [f32; DIMS]; // 3D point
-pub type Dims = P3;
+pub type Dims3 = P3;
 pub type P2 = [f32; PROJ_DIMS]; // 2D Point
 
 /// Enum for each coordinate system,

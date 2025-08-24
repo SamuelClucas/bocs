@@ -1,5 +1,5 @@
 use winit::dpi::PhysicalSize;
-use crate::world::voxel_grid::{P2, P3, Dims};
+use crate::world::voxel_grid::{P2, P3, Dims3};
 
 pub struct OrbitalCamera {
     pub c: P3, // where c is camera pos in world space, 

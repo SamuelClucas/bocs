@@ -2,21 +2,23 @@ use winit::{dpi::{PhysicalPosition, PhysicalSize}, window::Window};
 use core::f32;
 use std::{num::NonZero, sync::Arc};
 use crate::{
-    world::{camera::OrbitalCamera, voxel_grid::*}, 
+    world::{world::World, camera::OrbitalCamera, voxel_grid::{Dims3, VoxelGrid}}, 
     backend_admin::gpu::{
         enums::{Access, OffsetBehaviour}, 
         builders::{BindGroupLayoutBuilder},
         gfx_context::GraphicsContext}
     };
 use anyhow::{Result};
-use wgpu::{util::DeviceExt, wgt::TextureDescriptor, BindGroup, BindGroupEntry, BindGroupLayout, BufferBinding, BufferUsages, ComputePipeline, Extent3d, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
+use wgpu::{wgt::TextureDescriptor, BindGroup, BindGroupEntry, BindGroupLayout, BufferBinding, ComputePipeline, Extent3d, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
 use rand::prelude::*;
 use std::error::Error;
 use wgpu::TextureUsages;
+use crate::backend_admin::bridge::Bridge;
 
 
 pub struct State {
     gfx_context: GraphicsContext,
+    bridge: Bridge,
     pub mouse_is_pressed: bool,
     pub mouse_down: Option<PhysicalPosition<f64>>,
     pub window: Arc<Window>,
@@ -67,7 +69,11 @@ impl State {
     }
     pub async fn new(window: Arc<Window>, size: PhysicalSize<u32>) -> Result<Self, Box<dyn Error>> {
         let gfx_context = GraphicsContext::new(window).await?;
-        // add World here?
+        let dims: Dims3 = [200.0, 200.0, 200.0];
+        // World contains voxel_grid and camera
+        let world = World::new(dims, &gfx_context);
+
+
 
         // handle dispatch sizing through Bridge?
         let raymarch_group = 16;
@@ -75,13 +81,6 @@ impl State {
         let h_ceil= 0;
 
         
-        let dims = VoxelDims {
-            i: 200,
-            j: 200,
-            k: 200
-        };
-
-        let voxelgrid_vertices = VoxelVertices::centre_at_origin(&dims);
 
         let i_ceil = if dims.i % 8 == 0 { 0 }
         else { 1 };
