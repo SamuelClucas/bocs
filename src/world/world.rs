@@ -2,9 +2,8 @@ use crate::{backend_admin::gpu::gfx_context::GraphicsContext, world::{camera::Or
 
 /// Manages all World entities
 pub struct World {
-    voxel_grid: VoxelGrid,
+    pub voxel_grid: VoxelGrid,
     camera: OrbitalCamera
-
 }
 
 impl World {

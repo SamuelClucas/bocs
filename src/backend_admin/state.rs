@@ -3,17 +3,19 @@ use core::f32;
 use std::{num::NonZero, sync::Arc};
 use crate::{
     world::{world::World, camera::OrbitalCamera, voxel_grid::{Dims3, VoxelGrid}}, 
-    backend_admin::gpu::{
-        enums::{Access, OffsetBehaviour}, 
-        builders::{BindGroupLayoutBuilder},
-        gfx_context::GraphicsContext}
+    backend_admin::{
+        bridge::Bridge, 
+        gpu::{
+            enums::{Access, OffsetBehaviour}, 
+            builders::{BindGroupLayoutBuilder},
+            gfx_context::GraphicsContext}}
     };
 use anyhow::{Result};
 use wgpu::{wgt::TextureDescriptor, BindGroup, BindGroupEntry, BindGroupLayout, BufferBinding, ComputePipeline, Extent3d, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
-use rand::prelude::*;
+
 use std::error::Error;
 use wgpu::TextureUsages;
-use crate::backend_admin::bridge::Bridge;
+
 
 
 pub struct State {
@@ -53,42 +55,15 @@ pub struct State {
 }
 
 impl State {
-    /// Determines dispatch dims on each render() 
-    pub fn update_raygroup_ceil(&mut self, bounding_box: [i32; 4]) -> (u32, u32) {
-        let width = bounding_box[2] - bounding_box[0];  
-        let height = bounding_box[3] - bounding_box[1];
-        self.w_ceil = if width % self.raymarch_group == 0 { 0 }
-            else { 1 };
-        self.h_ceil = if height % self.raymarch_group == 0 { 0 } 
-            else { 1 };
-        
-        (
-            ((width / self.raymarch_group) + self.w_ceil) as u32, 
-            ((height / self.raymarch_group) + self.h_ceil) as u32
-        )
-    }
+    
     pub async fn new(window: Arc<Window>, size: PhysicalSize<u32>) -> Result<Self, Box<dyn Error>> {
         let gfx_context = GraphicsContext::new(window).await?;
         let dims: Dims3 = [200.0, 200.0, 200.0];
         // World contains voxel_grid and camera
         let world = World::new(dims, &gfx_context);
 
-
-
-        // handle dispatch sizing through Bridge?
-        let raymarch_group = 16;
-        let w_ceil= 0; // updated on each pass in render()
-        let h_ceil= 0;
-
-        
-
-        let i_ceil = if dims.i % 8 == 0 { 0 }
-        else { 1 };
-        let j_ceil = if dims.j % 4 == 0 { 0 }
-        else { 1 };
-        let k_ceil = if dims.k % 8 == 0 { 0 }
-        else { 1};
-
+        // Bridge holds rand seed and maintains dispatch dims for raymarch and laplacian
+        let bridge = Bridge::new(&world.voxel_grid, &gfx_context);
         
 
         // COMPUTE //
