@@ -1,17 +1,18 @@
 use winit::dpi::PhysicalSize;
-use crate::world::voxel_grid::{P3, Dims};
+use crate::world::voxel_grid::{P2, P3, Dims};
+
 pub struct OrbitalCamera {
-    pub c: [f32;3], // where c is camera pos in world space, 
-    pub f: [f32;3], // where f is unit vector from c to world space origin, orthogonal to u and r (u X r)
-    pub u: [f32;3], // where u is unit vector up from c, orthogonal to f and r (f x r)
-    pub r: [f32;3], // where r is unit vector right from c, orthogonal to f and u (f X u)  
-    pub centre: [f32;3], // ASSUMES WINDOW EXISTS ON CAMERA INIT (check state.rs new())
+    pub c: P3, // where c is camera pos in world space, 
+    pub f: P3, // where f is unit vector from c to world space origin, orthogonal to u and r (u X r)
+    pub u: P3, // where u is unit vector up from c, orthogonal to f and r (f x r)
+    pub r: P3, // where r is unit vector right from c, orthogonal to f and u (f X u)  
+    pub centre: P3, // ASSUMES WINDOW EXISTS ON CAMERA INIT (check state.rs new())
     scroll_coeff: f32,
 }
 
 impl OrbitalCamera {   
     // returns right-handed, orthogonal vector to a, b
-    pub fn cross(a: &[f32;3], b: &[f32;3]) -> [f32;3] {
+    pub fn cross(a: &P3, b: &P3) -> P3 {
         [
             (a[1] * b[2]) - (a[2] * b[1]), // x
             (a[2] * b[0]) - (a[0] * b[2]), // y
@@ -19,16 +20,16 @@ impl OrbitalCamera {
         ]
     }
     // returns scalar sum of component-wise products of a and b
-    pub fn dot(a: &[f32;3], b: &[f32;3]) -> f32{
+    pub fn dot(a: &P3, b: &P3) -> f32{
         (a[0]*b[0])+(a[1]*b[1])+(a[2]*b[2])
     }
 
-    pub fn magnitude(input: &[f32;3]) -> f32 {
+    pub fn magnitude(input: &P3) -> f32 {
         let square = Self::dot(input, input);
         square.sqrt()
     }
     // this is moving to the compute shader
-    pub fn world_to_ruf(&self, input: &[f32;3]) -> [f32; 3] { // right is x, up is y, forward is z
+    pub fn world_to_ruf(&self, input: &P3) -> P3 { // right is x, up is y, forward is z
         let offset = [input[0]-self.c[0], input[1]-self.c[1], input[2]-self.c[2]];
         [
                 Self::dot(&offset, &self.r), // right
@@ -36,7 +37,7 @@ impl OrbitalCamera {
                 Self::dot(&offset, &self.f) // forward
         ]
     }
-    pub fn ruf_to_ru_plane(&self, input: &[f32; 3], r_scale: &f32) -> [f32; 2] {
+    pub fn ruf_to_ru_plane(&self, input: &P3, r_scale: &f32) -> P2 {
         let normalised = OrbitalCamera::normalise(input.clone(), OrbitalCamera::magnitude(input));
         let centre_mag = OrbitalCamera::magnitude(&self.centre); // scale factor for F and U
 
@@ -50,25 +51,25 @@ impl OrbitalCamera {
         [ right_pixels, up_pixels ]
     }
 
-    pub fn normalise(mut a: [f32; 3], mag: f32) -> [f32; 3]{
+    pub fn normalise(mut a: P3, mag: f32) -> P3{
         a[0] /= mag;
         a[1] /= mag;
         a[2] /= mag;
         a
     }
-    pub fn scale(mut a: [f32; 3], k: f32) -> [f32; 3]{
+    pub fn scale(mut a: P3, k: f32) -> P3{
         a[0] *= k;
         a[1] *= k;
         a[2] *= k;
         a
     }
-    pub fn negate(mut a: [f32; 3]) -> [f32; 3]{
+    pub fn negate(mut a: P3) -> P3{
         a[0] = -a[0];
         a[1] = -a[1];
         a[2] = -a[2];
         a
     }
-    pub fn add( mut a: [f32; 3], b: [f32; 3]) -> [f32; 3]{
+    pub fn add( mut a: P3, b: P3) -> P3{
         a[0] += b[0];
         a[1] += b[1];
         a[2] += b[2];
@@ -114,7 +115,7 @@ impl OrbitalCamera {
         let multiplier_to_surface = Self::magnitude(&self.c);  // HACKY FIX - float division error build up!!!
 
         // HANDLE UP NEAR POLES
-        let up = if OrbitalCamera::dot(&self.c, &[0.0, 1.0, 0.0]) > 0.9 {
+        let up: P3 = if OrbitalCamera::dot(&self.c, &[0.0, 1.0, 0.0]) > 0.9 {
             [self.c[0] + 1.0, self.c[1], self.c[2]]
         }
         else {[self.c[0], self.c[1] + 0.9, self.c[2]]}; 
@@ -132,11 +133,11 @@ impl OrbitalCamera {
     }
 
     pub fn new(p: P3, size: &PhysicalSize<u32>) -> Self {
-        let pos = [i,j,k];
-        let mag = Self::magnitude(&pos);
-        // forward is negative camera pos, normalised by its magnitude
+
+        let mag = Self::magnitude(&p);
+        // forward is negative camera p, normalised by its magnitude
         let forward = OrbitalCamera::normalise(
-            OrbitalCamera::negate(pos.clone()), 
+            OrbitalCamera::negate(p.clone()), 
             mag);
 
         // f* kf = centre of near plane
@@ -146,7 +147,7 @@ impl OrbitalCamera {
         let centre = OrbitalCamera::scale(forward.clone(), kf);
 
         // at first, let up be 1 unit in j direction
-        let up = [pos[0], pos[1] + 1.0, pos[2]];
+        let up = [p[0], p[1] + 1.0, p[2]];
 
         // get right by u cross f, then normalise by its magnitude
         let right = Self::cross(&up, &forward);
@@ -159,7 +160,7 @@ impl OrbitalCamera {
 
        OrbitalCamera { 
         scroll_coeff: 0.3,
-        c: pos,
+        c: p,
         f: forward, 
         u: up, 
         r: right,

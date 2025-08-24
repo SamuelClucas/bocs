@@ -77,15 +77,8 @@ impl GraphicsContext {
         )
     }
 
-    pub fn update_surface_config(&mut self) -> Result<PhysicalSize<u32>, Error> {
-        let (surf, adapter, device) = match &mut(self.surface, self.adapter) {
-            (Some(s), Some(a)) => (s, a),
-            (Some(s), None) => return,
-            (None, Some(a)) => return,
-            (None, None) => return 
-        };
-
-        let surface_caps = surf.get_capabilities(adapter);
+    pub fn update_surface_config(&mut self) -> PhysicalSize<u32> {
+        let surface_caps = self.surface.get_capabilities(&self.adapter);
 
         let surface_format = surface_caps.formats.iter()
             .find(|f| f.is_srgb())
@@ -94,7 +87,7 @@ impl GraphicsContext {
 
         let size = self.window.inner_size();
 
-        self.surface_config = Some(wgpu::SurfaceConfiguration {
+        self.surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
             width: size.width,
@@ -103,10 +96,10 @@ impl GraphicsContext {
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
-        });
-        surf.configure(&device, &surface_config);
+        };
+        self.surface.configure(&self.device, &self.surface_config);
 
+        size
     }
-
 
 }
