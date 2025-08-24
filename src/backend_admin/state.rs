@@ -67,13 +67,14 @@ impl State {
     }
     pub async fn new(window: Arc<Window>, size: PhysicalSize<u32>) -> Result<Self, Box<dyn Error>> {
         let gfx_context = GraphicsContext::new(window).await?;
+        // add World here?
 
+        // handle dispatch sizing through Bridge?
         let raymarch_group = 16;
         let w_ceil= 0; // updated on each pass in render()
         let h_ceil= 0;
 
         
-
         let dims = VoxelDims {
             i: 200,
             j: 200,
@@ -92,12 +93,6 @@ impl State {
         
 
         // COMPUTE //
-        
-       
-        
-        
-        
-
         let compute_bind_group_layout = BindGroupLayoutBuilder::new("Compute Bind Group".to_string())
             .with_uniform_buffer(
                 ShaderStages::COMPUTE, 

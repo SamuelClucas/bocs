@@ -8,7 +8,7 @@ use std::error::Error;
 
 pub struct GraphicsContext {
     window: Arc<Window>,
-    size: PhysicalSize<u32>,
+    pub size: PhysicalSize<u32>,
     instance: Instance,
     adapter: Adapter,
     surface: Surface<'static>,

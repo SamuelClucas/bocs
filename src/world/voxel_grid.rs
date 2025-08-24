@@ -8,6 +8,7 @@ const DIMS: usize = 3;
 const PROJ_DIMS: usize = 2; // projection onto 2D surface
 
 pub type P3 = [f32; DIMS]; // 3D point
+pub type Dims = P3;
 pub type P2 = [f32; PROJ_DIMS]; // 2D Point
 
 /// Enum for each coordinate system,
@@ -20,7 +21,7 @@ pub enum SystemSet{
     WORLD(P3),
     RUF(P3),
     SQUARE(P2),
-}
+}2
 /// Enum for each coordinate system,
 /// same as SystemSet but with only an index payload for getting vertices
 /// useful to keep code explicit
@@ -215,8 +216,8 @@ pub struct VoxelGrid {
 /// VoxelGrid is not purely geometric - the coordinate system matters for simulation
 /// and visualisation logic
 impl VoxelGrid {
-    pub fn new_centered_at_origin(dims: &[f32; 3]) -> Self {
-        let [d1_size, d2_size, d3_size]= *dims;
+    pub fn new_centered_at_origin(dims: [f32; 3]) -> Self {
+        let [d1_size, d2_size, d3_size]= dims;
         let (d1_offset, d2_offset, d3_offset) = (d1_size/2.0, d2_size/2.0, d3_size/2.0);
 
         let p1 = [-d1_offset, -d2_offset, -d3_offset];

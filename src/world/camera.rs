@@ -1,5 +1,5 @@
 use winit::dpi::PhysicalSize;
-
+use crate::world::voxel_grid::{P3, Dims};
 pub struct OrbitalCamera {
     pub c: [f32;3], // where c is camera pos in world space, 
     pub f: [f32;3], // where f is unit vector from c to world space origin, orthogonal to u and r (u X r)
@@ -131,7 +131,7 @@ impl OrbitalCamera {
         }
     }
 
-    pub fn new(i: f32, j: f32, k: f32, size: &PhysicalSize<u32>) -> Self {
+    pub fn new(p: P3, size: &PhysicalSize<u32>) -> Self {
         let pos = [i,j,k];
         let mag = Self::magnitude(&pos);
         // forward is negative camera pos, normalised by its magnitude
