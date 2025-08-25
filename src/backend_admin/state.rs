@@ -5,7 +5,14 @@ use crate::{
     backend_admin::{
         bridge::Bridge, 
         gpu::{
-            builders::BindGroupLayoutBuilder, enums::{Access, OffsetBehaviour}, gfx_context::GraphicsContext, resources::Resources}}, world::{camera::OrbitalCamera, voxel_grid::{Dims3, VoxelGrid}, world::World}
+            builders::BindGroupLayoutBuilder, 
+            gfx_context::GraphicsContext, 
+            resources::Resources,
+            compute::Compute}}, 
+    world::{
+        camera::OrbitalCamera, 
+        voxel_grid::Dims3, 
+        world::World}
     };
 use anyhow::{Result};
 use wgpu::{wgt::TextureDescriptor, BindGroup, BindGroupEntry, BindGroupLayout, BufferBinding, ComputePipeline, Extent3d, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
@@ -63,30 +70,11 @@ impl State {
         // Bridge holds rand seed and maintains dispatch dims for raymarch and laplacian
         let bridge = Bridge::new(&world.voxel_grid, &gfx_ctx);
 
-        let resources = Resources::new(&dims, &world, &bridge, &mut gfx_ctx);
+        let resources = Resources::new(&dims, &world, &bridge, &mut gfx_ctx)?;
+        
+        let compute = Compute::new(&dims, &resources, &gfx_ctx);
         
 
-        // COMPUTE //
-        let compute_bind_group_layout = BindGroupLayoutBuilder::new("Compute Bind Group".to_string())
-            .with_uniform_buffer(
-                ShaderStages::COMPUTE, 
-                OffsetBehaviour::Static)
-            .with_storage_buffer(
-                ShaderStages::COMPUTE, 
-                OffsetBehaviour::Static, 
-                Access::ReadWrite)
-            .with_storage_buffer(
-                ShaderStages::COMPUTE,
-                OffsetBehaviour::Static,
-                Access::ReadWrite)
-            .with_storage_texture(
-                ShaderStages::COMPUTE, 
-                TextureFormat::Rgba8Unorm, 
-                wgpu::StorageTextureAccess::WriteOnly,
-            wgpu::TextureViewDimension::D2)
-            .build(&gfx_ctx.device);
-
-        
 
         
         let render_bind_group_layout = BindGroupLayoutBuilder::new("Render Bind Group".to_string())
@@ -94,90 +82,10 @@ impl State {
                 .with_sampled_texture(ShaderStages::FRAGMENT)
                 .build(&device);
 
-        let bind_group_descriptor = &wgpu::BindGroupDescriptor {
-            label: Some("Bind group descriptor"),
-            layout: &compute_bind_group_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer(BufferBinding { 
-                    buffer: &uni, 
-                    offset: 0, 
-                    size: NonZero::new((std::mem::size_of::<Uniforms>()) as u64)
-                }),
-            },
-            BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
-                    buffer:  &voxel_grid_buffer_a,
-                    offset: 0,
-                    size: NonZero::new((std::mem::size_of::<f32>() as u32 * dims.i * dims.j * dims.k) as u64)
-            })
-            },
-            BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
-                    buffer:  &voxel_grid_buffer_b,
-                    offset: 0,
-                    size: NonZero::new((std::mem::size_of::<f32>() as u32 * dims.i * dims.j * dims.k) as u64)
-            })
-            },
-            BindGroupEntry {
-                binding: 3,
-                resource: wgpu::BindingResource::TextureView(&texture_view)
-            }
-            ]
-        };
-
-        // binding 1, assigned to index 0 in render
-        let resources = device.create_bind_group(bind_group_descriptor);
-
-        // compute pipeline setup
-        let compute_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Compute Pipeline Layout"),
-            bind_group_layouts: &[&compute_bind_group_layout
-            ],
-            push_constant_ranges: &[]
-        });
-
-        // Entry Points
-        let init_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Init"),
-            layout: Some(&compute_pipeline_layout),
-            module: &init,
-            entry_point: Some("init"),
-            cache: None,
-            compilation_options: PipelineCompilationOptions{
-                constants: &[],
-                zero_initialize_workgroup_memory: true
-            }
-        });
-
-        let laplacian_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Laplacian"),
-            layout: Some(&compute_pipeline_layout),
-            module: &init,
-            entry_point: Some("laplacian"),
-            cache: None,
-            compilation_options: PipelineCompilationOptions{
-                constants: &[],
-                zero_initialize_workgroup_memory: true 
-            }
-        });
-         
-        let raymarch_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Raymarch"),
-            layout: Some(&compute_pipeline_layout),
-            module: &init,
-            entry_point: Some("raymarch"),
-            cache: None,
-            compilation_options: PipelineCompilationOptions{
-                constants: &[],
-                zero_initialize_workgroup_memory: true 
-            }
-        });
+     
         
        
-        // END of COMPUTE //
+
 
         
          

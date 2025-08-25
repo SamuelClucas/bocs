@@ -12,12 +12,12 @@ use std::error::Error;
 
 
 pub struct Resources {
-    sampler: Sampler,
-    ping_voxel_buffer: Buffer,
-    pong_voxel_buffer: Buffer,
+    pub sampler: Sampler,
+    pub ping_voxel_buffer: Buffer,
+    pub pong_voxel_buffer: Buffer,
     storage_texture: Texture,
-    texture_view: TextureView,
-    uniforms: Buffer
+    pub texture_view: TextureView,
+    pub uniforms: Buffer
 }
 
 impl Resources {
@@ -121,7 +121,7 @@ impl Resources {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct Uniforms {
+pub struct Uniforms {
     /// World -> Camera basis vectors, timestep, and random seed for voxel grid init
     /// Wgsl expects Vec4<f32> (16 byte alignment
     window_dims: [u32; 4],
