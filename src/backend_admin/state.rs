@@ -5,10 +5,7 @@ use crate::{
     backend_admin::{
         bridge::Bridge, 
         gpu::{
-            builders::BindGroupLayoutBuilder, 
-            gfx_context::GraphicsContext, 
-            resources::Resources,
-            compute::Compute}}, 
+            builders::BindGroupLayoutBuilder, compute::Compute, gfx_context::GraphicsContext, render::Render, resources::Resources}}, 
     world::{
         camera::OrbitalCamera, 
         voxel_grid::Dims3, 
@@ -26,43 +23,23 @@ pub struct State {
     gfx_ctx: GraphicsContext,
     world: World,
     bridge: Bridge,
+    resources: Resources,
+    compute: Compute,
+    render: Render,
+
+    dims: Dims3,
+    init_complete: bool,
+    read_ping: bool,
+    time: std::time::Instant,
+
     pub mouse_is_pressed: bool,
     pub mouse_down: Option<PhysicalPosition<f64>>,
-    pub window: Arc<Window>,
-
-    init_pipeline: Option<ComputePipeline>,
-    laplacian_pipeline: Option<ComputePipeline>,
-    raymarch_pipeline: ComputePipeline,
-
-    resources: Option<BindGroup>,
-    pub camera: OrbitalCamera,
-    pipeline: Option<wgpu::RenderPipeline>,
-    render_bind_group: Option<BindGroup>,
-    uniform_buffer: Option<wgpu::Buffer>,
-    voxel_grid_buffer_a: Option<wgpu::Buffer>,
-    voxel_grid_buffer_b: Option<wgpu::Buffer>,
-    compute_bind_group_layout: Option<BindGroupLayout>,
-    render_bind_group_layout: Option<BindGroupLayout>,
-    init_complete: bool,
-    dims: VoxelDims,
-    i_ceil: u32,
-    j_ceil: u32,
-    k_ceil: u32,
-    time: std::time::Instant,
-    rng: ThreadRng, // Save for field hot reinit of voxel grid
-    texture_view: TextureView,
-    read_a: bool,
-    voxelgrid_vertices: VoxelVertices,
-    w_ceil: i32,
-    h_ceil: i32,
-    raymarch_group: i32,
-    sampler: wgpu::Sampler
 }
 
 impl State {
     
     pub async fn new(window: Arc<Window>, size: PhysicalSize<u32>) -> Result<Self, Box<dyn Error>> {
-        let gfx_ctx = GraphicsContext::new(window).await?;
+        let mut gfx_ctx: = GraphicsContext::new(window).await?;
         let dims: Dims3 = [200, 200, 200];
         // World contains voxel_grid and camera
         let world = World::new(dims, &gfx_ctx);
@@ -74,128 +51,24 @@ impl State {
         
         let compute = Compute::new(&dims, &resources, &gfx_ctx);
         
-
-
+        let render = Render::new(&resources, &gfx_ctx);
         
-        let render_bind_group_layout = BindGroupLayoutBuilder::new("Render Bind Group".to_string())
-                .with_sampler(ShaderStages::FRAGMENT)
-                .with_sampled_texture(ShaderStages::FRAGMENT)
-                .build(&device);
-
-     
-        
-       
-
-
-        
-         
-        // TEXTURES //
-        let fragment = device.create_shader_module(ShaderModuleDescriptor{
-            label: Some("Fragment shader module"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/fragment.wgsl").into())
-            });
-
-        let vertex = device.create_shader_module(
-            ShaderModuleDescriptor { 
-                label: Some("Vertex shader module"), 
-                source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/vertex.wgsl").into()) 
-            });
-        
-        let render_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor{
-            label: Some("Render Bind Group"),
-            layout: &render_bind_group_layout,
-            entries: &[BindGroupEntry{
-                binding: 0,
-                resource: wgpu::BindingResource::Sampler(&sampler)},
-
-                BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&texture_view)
-                }
-            ]
-        });
-
-        let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor{
-            label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[&render_bind_group_layout],
-            push_constant_ranges: &[]
-        });
-
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor { 
-            label: Some("Render Pipeline"), 
-            layout: Some(&render_pipeline_layout), 
-            vertex: wgpu::VertexState{
-                module: &vertex,
-                entry_point: Some("main"), 
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[]
-            }, 
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList, 
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw, 
-                cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-                polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
-                unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
-                conservative: false,
-            },
-            depth_stencil: None, 
-            multisample: wgpu::MultisampleState {
-                    count: 1, 
-                    mask: !0, 
-                    alpha_to_coverage_enabled: false, 
-                }, 
-            fragment: Some(wgpu::FragmentState { // needed to store colour data to the surface
-               module: &fragment,
-               entry_point: Some("main"),
-               compilation_options: wgpu::PipelineCompilationOptions::default(),
-               targets: &[Some(wgpu::ColorTargetState {
-                    format: surface_config.format, // format of surface
-                    blend: Some(wgpu::BlendState::REPLACE), // replace old colour with new colour
-                    write_mask: wgpu::ColorWrites::ALL // write to all channels
-               })]
-            }), 
-            multiview: None, 
-            cache: None, 
-        });
-        
-
         Ok (
             Self { 
-                gfx_context: gfx_context,
+                gfx_ctx: gfx_ctx,
                 world: world,
                 bridge: bridge,
+                resources: resources,
+                compute: compute,
+                render: render,
 
-                mouse_is_pressed: false,
-
-                window, 
-
-                init_pipeline: Some(init_pipeline),
-                laplacian_pipeline: Some(laplacian_pipeline),
-                pipeline: Some(render_pipeline),
-            
-                mouse_down: None,
-      
-                resources: Some(resources),
-                render_bind_group: Some(render_bind_group),
-                voxel_grid_buffer_a: Some(voxel_grid_buffer_a),
-                voxel_grid_buffer_b: Some(voxel_grid_buffer_b),
-                uniform_buffer: Some(uni),
-                compute_bind_group_layout: Some(compute_bind_group_layout),
-                render_bind_group_layout: Some(render_bind_group_layout),
                 init_complete: false,
+                read_ping: true,
                 dims: dims,
                 time: std::time::Instant::now(),
 
-
-                read_a: true,
-                raymarch_pipeline: raymarch_pipeline,
-
-                sampler
+                mouse_is_pressed: false,
+                mouse_down: None
                 }
         )
     }
