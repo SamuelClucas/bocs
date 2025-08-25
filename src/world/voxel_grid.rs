@@ -8,7 +8,7 @@ const DIMS: usize = 3;
 const PROJ_DIMS: usize = 2; // projection onto 2D surface
 
 pub type P3 = [f32; DIMS]; // 3D point
-pub type Dims3 = P3;
+pub type Dims3 = [u32; DIMS];
 pub type P2 = [f32; PROJ_DIMS]; // 2D Point
 
 /// Enum for each coordinate system,
@@ -21,7 +21,7 @@ pub enum SystemSet{
     WORLD(P3),
     RUF(P3),
     SQUARE(P2),
-}2
+}
 /// Enum for each coordinate system,
 /// same as SystemSet but with only an index payload for getting vertices
 /// useful to keep code explicit
@@ -196,9 +196,7 @@ impl Access<usize, P3> for Cuboid {
 /// this way ruf_cuboid can be populated and ruf_is_stale is false
 #[derive(Debug, Copy, Clone)]
 pub struct VoxelGrid {
-    pub d1_size: f32,
-    pub d2_size: f32,
-    pub d3_size: f32,
+    pub dims: Dims3,
 
     pub ruf_is_stale: bool, // triggered on any change to VoxelGrid or Camera
 
@@ -216,39 +214,26 @@ pub struct VoxelGrid {
 /// VoxelGrid is not purely geometric - the coordinate system matters for simulation
 /// and visualisation logic
 impl VoxelGrid {
-    pub fn new_centered_at_origin(dims: [f32; 3]) -> Self {
-        let [d1_size, d2_size, d3_size]= dims;
-        let (d1_offset, d2_offset, d3_offset) = (d1_size/2.0, d2_size/2.0, d3_size/2.0);
+    pub fn new_centered_at_origin(dims: Dims3) -> Self {
+        let offset_dims = [(dims[0]/2) as f32, (dims[1]/2) as f32, (dims[2]/2) as f32];
 
-        let p1 = [-d1_offset, -d2_offset, -d3_offset];
-        let p2 = [-d1_offset, d2_offset, -d3_offset];
-        let p3 = [d1_offset, d2_offset, -d3_offset];
-        let p4 = [d1_offset, -d2_offset, -d3_offset];
-
-        let near_face = CuboidFace {
-            p1: p1,
-            p2: p2,
-            p3: p3,
-            p4: p4
+        let near_face: CuboidFace = CuboidFace {
+            p1: [-offset_dims[0], -offset_dims[1], -offset_dims[2]],
+            p2: [-offset_dims[0], offset_dims[1], -offset_dims[2]],
+            p3: [offset_dims[0], offset_dims[1], -offset_dims[2]],
+            p4: [offset_dims[0], -offset_dims[1], -offset_dims[2]]
         };
 
-        let p5 = [-d1_offset, -d2_offset, d3_offset];
-        let p6 = [-d1_offset, d2_offset, d3_offset];
-        let p7 = [d1_offset, d2_offset, d3_offset];
-        let p8 = [d1_offset, -d2_offset, d3_offset];
-
-        let far_face = CuboidFace {
-            p1: p5,
-            p2: p6,
-            p3: p7,
-            p4: p8
+        let far_face: CuboidFace = CuboidFace {
+            p1: [-offset_dims[0], -offset_dims[1], offset_dims[2]],
+            p2: [-offset_dims[0], offset_dims[1], offset_dims[2]],
+            p3:  [offset_dims[0], offset_dims[1], offset_dims[2]],
+            p4:  [offset_dims[0], -offset_dims[1], offset_dims[2]]
         };
-
+      
         // FOR EXAMPLE - rh coordinates looking down k,-ijk first (i major, k minor), bottom left, counterclockwise 
         Self {
-            d1_size: d1_size,
-            d2_size: d2_size,
-            d3_size: d3_size,
+            dims: dims,
 
             world_cuboid: Cuboid {
                 f1: near_face, // centered at origin using offsets
