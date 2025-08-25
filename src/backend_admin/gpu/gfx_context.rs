@@ -12,14 +12,14 @@ pub struct GraphicsContext {
     instance: Instance,
     adapter: Adapter,
 
-    surface: Surface<'static>,
-    surface_texture: SurfaceTexture,
-    surface_texture_view: TextureView,
+    pub surface: Surface<'static>,
+    pub surface_texture: SurfaceTexture,
+    pub surface_texture_view: TextureView,
     pub surface_config: SurfaceConfiguration,
     pub surface_configured: bool,
 
     pub device: Device,
-    queue: Queue,
+    pub queue: Queue,
     
 }
 

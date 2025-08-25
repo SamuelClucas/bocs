@@ -19,7 +19,8 @@ use wgpu::TextureUsages;
 
 
 pub struct State {
-    gfx_context: GraphicsContext,
+    gfx_ctx: GraphicsContext,
+    world: World,
     bridge: Bridge,
     pub mouse_is_pressed: bool,
     pub mouse_down: Option<PhysicalPosition<f64>>,
@@ -58,7 +59,7 @@ impl State {
     
     pub async fn new(window: Arc<Window>, size: PhysicalSize<u32>) -> Result<Self, Box<dyn Error>> {
         let gfx_context = GraphicsContext::new(window).await?;
-        let dims: Dims3 = [200.0, 200.0, 200.0];
+        let dims: Dims3 = [200, 200, 200];
         // World contains voxel_grid and camera
         let world = World::new(dims, &gfx_context);
 
@@ -272,21 +273,19 @@ impl State {
         Ok (
             Self { 
                 gfx_context: gfx_context,
-                i_ceil: i_ceil,
-                j_ceil: j_ceil,
-                k_ceil: k_ceil,
+                world: world,
+                bridge: bridge,
+
                 mouse_is_pressed: false,
+
                 window, 
-                device,
-                queue,
-                surface,
+
                 init_pipeline: Some(init_pipeline),
                 laplacian_pipeline: Some(laplacian_pipeline),
                 pipeline: Some(render_pipeline),
-                surf_config: surface_config,
-                is_surface_configured: true,
+            
                 mouse_down: None,
-                camera: camera,
+      
                 resources: Some(resources),
                 render_bind_group: Some(render_bind_group),
                 voxel_grid_buffer_a: Some(voxel_grid_buffer_a),
@@ -297,14 +296,11 @@ impl State {
                 init_complete: false,
                 dims: dims,
                 time: std::time::Instant::now(),
-                rng: rng,
-                texture_view: texture_view,
+
+
                 read_a: true,
                 raymarch_pipeline: raymarch_pipeline,
-                voxelgrid_vertices: voxelgrid_vertices,
-                raymarch_group: raymarch_group,
-                w_ceil: w_ceil,
-                h_ceil: h_ceil,
+
                 sampler
                 }
         )
@@ -413,50 +409,7 @@ impl State {
 
     
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        // Pixel into world units
-        let centre_top_d = self.surf_config.height as f32 / 2.0; // 1:1 vertical pixels and up vector
-        let right_scale = self.surf_config.width as f32 / 2.0 / centre_top_d; // garantees FOV 90 in vertical
-        println!("Right scale: {}", right_scale);
-        let centre_right_d = centre_top_d * right_scale;
-        
-        let bounding_box = {
-            let mut max_r = f32::NEG_INFINITY;
-            let mut max_u = f32::NEG_INFINITY;
-            let mut min_r = f32::INFINITY;
-            let mut min_u = f32::INFINITY;
-
-            for i in 0..8 {
-                // VOXEL VERTICES INTO RUF
-                match self.voxelgrid_vertices.get_point(i, SystemGet::WORLD) {
-                    SystemSet::WORLD(point) => {
-                        let ruf_point = self.camera.world_to_ruf(&point);
-                        self.voxelgrid_vertices.set_point(i, SystemSet::RUF(ruf_point))
-                    },
-                    _ => { println!("Couldn't get voxelgrid WORLD vertex.\n"); } }
-                // PROJECT ONTO NEAR PLANE
-                match self.voxelgrid_vertices.get_point(i, SystemGet::RUF) {
-                    SystemSet::RUF(point) => {
-                        let projection = self.camera.ruf_to_ru_plane(&point, &right_scale);
-                        self.voxelgrid_vertices.set_point(i, SystemSet::PLANE(projection));
-                    },
-                    _ => { println!("Couldn't get voxelgrid RUF vertex.\n"); }
-                }
-                // COMPUTE BOUNDING BOX
-                match self.voxelgrid_vertices.get_point(i, SystemGet::PLANE) {
-                    SystemSet::PLANE(point) => {
-                        max_r = point[0].max(max_r);
-                        max_u = point[1].max(max_u);
-                        min_r = point[0].min(min_r);
-                        min_u = point[1].min(min_u);
-                    },
-                    _ => { println!("Couldn't get voxelgrid PLANE vertex.\n"); }
-                }
-            }
-            [(min_r - 1.0).max(-centre_right_d) as i32, 
-            (min_u - 1.0).max(-centre_top_d) as i32, 
-            (max_r + 1.0).min(centre_right_d) as i32, 
-            (max_u + 1.0).min(centre_top_d) as i32]
-        };
+        self.world.generate_bb_projection(&self.gfx_ctx);
 
         // this owns the texture, wrapping it with some extra swapchain-related info
         let output = self.surface.get_current_texture()?;
@@ -493,7 +446,7 @@ impl State {
         };
 
         let uniforms = uniforms.flatten_u8();
-        self.queue.write_buffer(self.uniform_buffer.as_ref().unwrap(), 0, uniforms);
+        self.gfx_ctx.queue.write_buffer(self.uniform_buffer.as_ref().unwrap(), 0, uniforms);
 
         // UPDATE TIMESTEP COMPLETE //
 
@@ -511,8 +464,8 @@ impl State {
             // Raymarch
             compute_pass.set_pipeline(&self.raymarch_pipeline);
             compute_pass.set_bind_group(0, self.resources.as_ref().unwrap(), &[]); 
-            let (dispatch_x, dispatch_y) = self.update_raygroup_ceil(bounding_box);
-            compute_pass.dispatch_workgroups(dispatch_x, dispatch_y, 1); 
+            let [dispatch_x, dispatch_y, z] = self.bridge.raymarch_dispatch;
+            compute_pass.dispatch_workgroups(dispatch_x, dispatch_y, z); 
         }
         }
         else {
@@ -529,8 +482,8 @@ impl State {
             // Raymarch
             compute_pass.set_pipeline(&self.raymarch_pipeline);
             compute_pass.set_bind_group(0, self.resources.as_ref().unwrap(), &[]); 
-            let (dispatch_x, dispatch_y) = self.update_raygroup_ceil(bounding_box);
-            compute_pass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
+            let [dispatch_x, dispatch_y, z] = self.bridge.raymarch_dispatch;
+            compute_pass.dispatch_workgroups(dispatch_x, dispatch_y, z);
             }
         }
         
@@ -562,8 +515,8 @@ impl State {
         } // encoder borrow dropped here
         
         // submit will accept anything that implements IntoIter
-        self.queue.submit(std::iter::once(encoder.finish())); // allowing encoder call here
-        output.present();
+        self.gfx_ctx.queue.submit(std::iter::once(encoder.finish())); // allowing encoder call here
+        self.gfx_ctx.surface_texture.present();
     
         Ok(())
 
