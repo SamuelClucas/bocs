@@ -3,7 +3,7 @@ use crate::{backend_admin::gpu::gfx_context::GraphicsContext, world::{camera::Or
 /// Manages all World entities
 pub struct World {
     pub voxel_grid: VoxelGrid,
-    camera: OrbitalCamera
+    pub camera: OrbitalCamera
 }
 
 pub type BoundingBox = [P2i; 2];

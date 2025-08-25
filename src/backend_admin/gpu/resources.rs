@@ -1,77 +1,68 @@
-use crate::{backend_admin::gpu::gfx_context::GraphicsContext, 
+use crate::{backend_admin::{
+    gpu::gfx_context::GraphicsContext, 
+    bridge::Bridge},
     world::{
-        voxel_grid::VoxelDims,
-        camera::OrbitalCamera
+        world::World,
+        voxel_grid::{Dims3}
     }};
-use wgpu::BufferUsages;
+use wgpu::{Buffer, BufferUsages, Extent3d, Sampler, Texture, TextureDescriptor, TextureUsages, TextureView, TextureViewDescriptor};
 use wgpu::util::DeviceExt;
-use wgpu::Extent3d;
 use winit::dpi::PhysicalSize;
+use std::error::Error;
 
 
 pub struct Resources {
-    sampler:,
-    ping_voxel_buffer:,
-    pong_voxel_buffer:,
-    storage_texture:,
-    texture_view:,
-    uniforms: ,
-    voxel_dims: VoxelDims,
-    camera: OrbitalCamera
+    sampler: Sampler,
+    ping_voxel_buffer: Buffer,
+    pong_voxel_buffer: Buffer,
+    storage_texture: Texture,
+    texture_view: TextureView,
+    uniforms: Buffer
 }
 
 impl Resources {
-    pub fn new(dims: VoxelDims, gfx_context: GraphicsContext) -> Result<Self> {
-        let (surface_conf,device) = match & ( gfx_context.surface_config, gfx_context.device) {
-            (Some(s),Some(d)) => (s, d),
-            (Some(s), None) => return None,
-            (None, Some(s)) => return None,
-            (None, None) => return None
-        };
+    pub fn new(dims: &Dims3, world: &World, bridge: &Bridge, gfx_ctx: &mut GraphicsContext) -> Result<Self, Box<dyn Error>> {
 
-        let size = if gfx_context.surface_configured {
-             PhysicalSize::new(surface_conf.width, surface_conf.height) }
-             else { gfx_context.update_surface_config()? };
+        let size = if gfx_ctx.surface_configured {
+             PhysicalSize::new(gfx_ctx.surface_config.width, gfx_ctx.surface_config.height) }
+             else { gfx_ctx.update_surface_config()? };
 
-        let ping_voxels = device.create_buffer(&wgpu::BufferDescriptor {
+        let ping_voxels = gfx_ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Compute store a"),
-            size:  (std::mem::size_of::<f32>() as u32 * dims.i * dims.j * dims.k) as u64,
+            size:  (std::mem::size_of::<f32>() as u32 * dims[0] * dims[1] * dims[2]) as u64,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false 
         });
 
-        let pong_voxels = device.create_buffer(&wgpu::BufferDescriptor {
+        let pong_voxels = gfx_ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Compute store b"),
-            size:  (std::mem::size_of::<f32>() as u32 * dims.i * dims.j * dims.k) as u64,
+            size:  (std::mem::size_of::<f32>() as u32 * dims[0] * dims[1] * dims[2]) as u64,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false
         }); 
 
-        let camera = OrbitalCamera::new((dims.i as f32) * 2, 0.0, 0.0, &size);
-
-        let mut rng = rand::rng();
 
         let uniforms = Uniforms {
             window_dims: [size.width/2, size.height/2, 0, 0],
-            dims: [dims.i as u32, dims.j as u32, dims.k as u32, (dims.i * dims.j) as u32],
+            dims: [dims[0], dims[1], dims[2], dims[0] * dims[1]],
             bounding_box: [0, 0, 0, 0], // set in render() 
-            cam_pos: [camera.c[0], camera.c[1], camera.c[2], 0.0 as f32],
-            forward: [camera.f[0], camera.f[1], camera.f[2], 0.0 as f32],
-            centre: [camera.centre[0], camera.centre[1], camera.centre[2], 0.0 as f32],
-            up: [camera.u[0], camera.u[1], camera.u[2], 0.0 as f32],
-            right: [camera.r[0], camera.r[1], camera.r[2], 0.0 as f32],
+            cam_pos: [world.camera.c[0], world.camera.c[1], world.camera.c[2], 0.0 as f32],
+            forward: [world.camera.f[0], world.camera.f[1], world.camera.f[2], 0.0 as f32],
+            centre: [world.camera.centre[0], world.camera.centre[1], world.camera.centre[2], 0.0 as f32],
+            up: [world.camera.u[0], world.camera.u[1], world.camera.u[2], 0.0 as f32],
+            right: [world.camera.r[0], world.camera.r[1], world.camera.r[2], 0.0 as f32],
             timestep: [0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32],
-            seed: [rng.random::<f32>(), 0.0 as f32, 0.0 as f32, 0.0 as f32],
+            seed: [bridge.rand_seed, 0, 0, 0],
             flags: [1, 0, 0, 0]
         };
         
-        let uniforms = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let uniforms = gfx_ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform buffer"),
             contents: uniforms.flatten_u8(),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
-        let storage_texture = device.create_texture(&TextureDescriptor{
+        let storage_texture = gfx_ctx.device.create_texture(&TextureDescriptor{
             label: Some("Storage Texture"),
             size: Extent3d {
                 width: size.width, 
@@ -98,7 +89,31 @@ impl Resources {
             array_layer_count:None
         });
 
+        let sampler = gfx_ctx.device.create_sampler(&wgpu::SamplerDescriptor{
+            label: Some("Sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Linear,
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 0.0,
+            compare: None,
+            anisotropy_clamp: 1,
+            border_color: None
+        });
 
+        Ok(
+            Resources {
+                sampler: sampler,
+                ping_voxel_buffer: ping_voxels,
+                pong_voxel_buffer: pong_voxels,
+                storage_texture: storage_texture,
+                texture_view: texture_view,
+                uniforms: uniforms
+            }
+        )
 
     }
 
@@ -118,7 +133,7 @@ struct Uniforms {
     up: [f32; 4], // [2]< padding
     right: [f32; 4], // [2]< padding
     timestep: [f32; 4], // only [0]
-    seed: [f32; 4], // only [0]
+    seed: [u32; 4], // only [0]
     flags: [u32; 4]
 
 }

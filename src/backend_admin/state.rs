@@ -2,13 +2,10 @@ use winit::{dpi::{PhysicalPosition, PhysicalSize}, window::Window};
 use core::f32;
 use std::{num::NonZero, sync::Arc};
 use crate::{
-    world::{world::World, camera::OrbitalCamera, voxel_grid::{Dims3, VoxelGrid}}, 
     backend_admin::{
         bridge::Bridge, 
         gpu::{
-            enums::{Access, OffsetBehaviour}, 
-            builders::{BindGroupLayoutBuilder},
-            gfx_context::GraphicsContext}}
+            builders::BindGroupLayoutBuilder, enums::{Access, OffsetBehaviour}, gfx_context::GraphicsContext, resources::Resources}}, world::{camera::OrbitalCamera, voxel_grid::{Dims3, VoxelGrid}, world::World}
     };
 use anyhow::{Result};
 use wgpu::{wgt::TextureDescriptor, BindGroup, BindGroupEntry, BindGroupLayout, BufferBinding, ComputePipeline, Extent3d, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
@@ -58,13 +55,15 @@ pub struct State {
 impl State {
     
     pub async fn new(window: Arc<Window>, size: PhysicalSize<u32>) -> Result<Self, Box<dyn Error>> {
-        let gfx_context = GraphicsContext::new(window).await?;
+        let gfx_ctx = GraphicsContext::new(window).await?;
         let dims: Dims3 = [200, 200, 200];
         // World contains voxel_grid and camera
-        let world = World::new(dims, &gfx_context);
+        let world = World::new(dims, &gfx_ctx);
 
         // Bridge holds rand seed and maintains dispatch dims for raymarch and laplacian
-        let bridge = Bridge::new(&world.voxel_grid, &gfx_context);
+        let bridge = Bridge::new(&world.voxel_grid, &gfx_ctx);
+
+        let resources = Resources::new(&dims, &world, &bridge, &mut gfx_ctx);
         
 
         // COMPUTE //
@@ -85,22 +84,9 @@ impl State {
                 TextureFormat::Rgba8Unorm, 
                 wgpu::StorageTextureAccess::WriteOnly,
             wgpu::TextureViewDimension::D2)
-            .build(&device);
+            .build(&gfx_ctx.device);
 
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor{
-            label: Some("Sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
-            lod_min_clamp: 0.0,
-            lod_max_clamp: 0.0,
-            compare: None,
-            anisotropy_clamp: 1,
-            border_color: None
-        });
+        
 
         
         let render_bind_group_layout = BindGroupLayoutBuilder::new("Render Bind Group".to_string())
