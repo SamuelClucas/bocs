@@ -1,7 +1,7 @@
 
 use crate::{
     backend_admin::gpu::gfx_context::GraphicsContext,
-    world::voxel_grid::VoxelGrid
+    world::{voxel_grid::VoxelGrid, world::BoundingBox}
 };
 use rand::Rng;
 
@@ -51,17 +51,18 @@ impl Bridge {
     }
 
     /// Determines dispatch dims on each render() 
-    pub fn update_raygroup_ceil(&mut self, bounding_box: [i32; 4]) -> (u32, u32) {
-        let width = bounding_box[2] - bounding_box[0];  
-        let height = bounding_box[3] - bounding_box[1];
-        self.w_ceil = if width % self.raymarch_group == 0 { 0 }
-            else { 1 };
-        self.h_ceil = if height % self.raymarch_group == 0 { 0 } 
-            else { 1 };
+    pub fn update_raymarch_dispatch(&mut self, bounding_box: BoundingBox){
+        let (w, h) = (
+            (bounding_box[1][0] - bounding_box[0][0]) as u32, 
+            (bounding_box[1][1] - bounding_box[0][1]) as u32
+        );  
+
+        assert!(w > 0 && h > 0); // OrbitalCamera implementation should always have voxel grid in view, so should never be 0
         
-        (
-            ((width / self.raymarch_group) + self.w_ceil) as u32, 
-            ((height / self.raymarch_group) + self.h_ceil) as u32
-        )
+        self.raymarch_dispatch = [
+            w.div_ceil(RAYMARCH_GROUPS[0]),
+            h.div_ceil(RAYMARCH_GROUPS[1]),
+            1
+        ];
     }
 }
