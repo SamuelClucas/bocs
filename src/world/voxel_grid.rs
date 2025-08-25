@@ -9,7 +9,8 @@ const PROJ_DIMS: usize = 2; // projection onto 2D surface
 
 pub type P3 = [f32; DIMS]; // 3D point
 pub type Dims3 = [u32; DIMS];
-pub type P2 = [f32; PROJ_DIMS]; // 2D Point
+pub type P2f = [f32; PROJ_DIMS]; // 2D Point
+pub type P2i = [i32; PROJ_DIMS]; 
 
 /// Enum for each coordinate system,
 /// Carries point as P3 or P2 and is 
@@ -20,7 +21,7 @@ pub type P2 = [f32; PROJ_DIMS]; // 2D Point
 pub enum SystemSet{
     WORLD(P3),
     RUF(P3),
-    SQUARE(P2),
+    SQUARE(P2i),
 }
 /// Enum for each coordinate system,
 /// same as SystemSet but with only an index payload for getting vertices
@@ -48,27 +49,27 @@ pub trait Access<I, O> {
 /// p4: bottom right
 /// when looking down the first basis vector of your coordinate system (e.g., ijk, i going into the screen)
 #[derive(Debug, Copy, Clone)]
-struct Square {
-    p1: P2,
-    p2: P2,
-    p3: P2,
-    p4: P2,
+pub struct Square<T> {
+    pub p1: T,
+    pub p2: T,
+    pub p3: T,
+    pub p4: T,
 }
 /// Purely geometric Square
 /// Implements Access trait
-impl Default for Square {
+impl Default for Square<[i32; PROJ_DIMS]> {
     fn default() -> Self {
         Square {
-            p1: [0.0, 0.0],
-            p2: [0.0, 0.0],
-            p3: [0.0, 0.0],
-            p4: [0.0, 0.0],
+            p1: [0 as i32, 0 as i32],
+            p2: [0 as i32, 0 as i32],
+            p3: [0 as i32, 0 as i32],
+            p4: [0 as i32, 0 as i32],
         }
     }
 }
-impl Access<usize, P2> for Square {
+impl Access<usize, P2i> for Square<[i32; PROJ_DIMS]> {
     /// Getter for purely geometric Square vertices (P2s)
-    fn get_vertex_at(&self, idx: usize) -> P2 {
+    fn get_vertex_at(&self, idx: usize) -> P2i {
         if idx > 4 || idx < 0 { panic!("Out of bounds Square vertex access attempt. Vertex index should be <= 3 and >= 0.\n") } // OOB attempts are unrecoverable errors
          else {
             match idx {
@@ -81,7 +82,7 @@ impl Access<usize, P2> for Square {
         }
     }
     /// Setter for purely geometric Square vertices (P2s)
-    fn set_vertex_at(&mut self, idx: usize, point: P2) {
+    fn set_vertex_at(&mut self, idx: usize, point: P2i) {
         if idx > 4 || idx < 0 { panic!("Out of bounds Square vertex access attempt. Vertex index should be <= 3 and >= 0.\n") } // OOB attempts are unrecoverable errors
         else {
             match idx {
@@ -204,7 +205,7 @@ pub struct VoxelGrid {
 
     pub ruf_cuboid: Cuboid, // vertices of voxel grid in camera basis vectors Right, Up, Forward
 
-    pub onto_plane: [Square; 2] // 8 3D vertices -> 8 2D vertices is 2 Squares, distinct from CuboidFace (which uses P3s)
+    pub onto_plane: [Square<[i32; 2]>; 2] // 8 3D vertices -> 8 2D vertices is 2 Squares, distinct from CuboidFace (which uses P3s)
 }
 
 /// World coordinates are always P3, but...
@@ -245,7 +246,7 @@ impl VoxelGrid {
             // populated later 
             ruf_cuboid: Cuboid::default(),
 
-            onto_plane: [Square::default(); 2] // 2D PROJECTION
+            onto_plane: [Square::<[i32; 2]>::default(); 2] // 2D PROJECTION
         }
     }    
 }
@@ -266,8 +267,7 @@ impl Access<SystemGet, SystemSet> for VoxelGrid {
                 assert!(vertex < 8 && vertex >= 0); //  still bound at 7
                 let face = vertex / 4; // always floored, so 0 or 1
                 let rem = vertex % 4; // always 0, 1, 2 or 3
-                SystemSet::SQUARE(self.onto_plane[face].get_vertex_at(rem), 
-                )
+                SystemSet::SQUARE(self.onto_plane[face].get_vertex_at(rem))
             },
         }   
     }
