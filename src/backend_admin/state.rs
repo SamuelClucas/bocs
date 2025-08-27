@@ -78,10 +78,8 @@ impl State {
         if (width != self.gfx_ctx.surface_config.width || height != self.gfx_ctx.surface_config.height) && (width > 0 && height > 0) { 
             println!("Resize if passed\n");
             self.gfx_ctx.update_surface_config();
-
-            self.bridge.update_raymarch_dispatch(self.world.generate_bb_projection(&self.gfx_ctx));
-            
             self.world.camera.update(None, None, None, Some(&PhysicalSize {width, height})); // TODO: REPLACE OPTIONS WITH ENUMS
+            self.bridge.update_raymarch_dispatch(self.world.generate_bb_projection(&self.gfx_ctx));
 
             self.resources.on_resize(&self.dims, width, height, &self.gfx_ctx, &self.world, &self.bridge);
 
