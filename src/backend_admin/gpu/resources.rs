@@ -148,7 +148,7 @@ impl Resources {
 
         let unis = Uniforms {
             window_dims: [width/2, height/2, 0, 0], // could update these via command encoder
-            dims: [self.dims[0], self.dims[1], self.dims[2], self.dims[0] * self.dims[1]],
+            dims: [dims[0], dims[1], dims[2], dims[0] * dims[1]],
             bounding_box: [0, 0, 0, 0], // set in render() 
             cam_pos: [world.camera.c[0], world.camera.c[1], world.camera.c[2], 0.0 as f32],
             forward: [world.camera.f[0], world.camera.f[1], world.camera.f[2], 0.0 as f32],
