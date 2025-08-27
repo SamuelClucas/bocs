@@ -163,5 +163,42 @@ impl Compute {
 
     }
 
+    pub fn on_resize(&mut self, dims: &Dims3, gfx_ctx: &GraphicsContext, rsrcs: &Resources) {
+        let bind_group_descriptor = &wgpu::BindGroupDescriptor {
+            label: Some("Bind group descriptor"),
+            layout: &self.bg_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(BufferBinding { 
+                    buffer: &rsrcs.uniforms, 
+                    offset: 0, 
+                    size: NonZero::new((std::mem::size_of::<Uniforms>()) as u64)
+                }),
+            },
+            BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
+                    buffer:  &rsrcs.ping_voxel_buffer,
+                    offset: 0,
+                    size: NonZero::new((std::mem::size_of::<f32>() as u32 * dims[0] * dims[1] * dims[2]) as u64)
+            })
+            },
+            BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
+                    buffer:  &rsrcs.pong_voxel_buffer,
+                    offset: 0,
+                    size: NonZero::new((std::mem::size_of::<f32>() as u32 * dims[0] * dims[1] * dims[2]) as u64)
+            })
+            },
+            BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::TextureView(&rsrcs.texture_view)
+            }
+            ]
+        };
+        self.bg = gfx_ctx.device.create_bind_group(bind_group_descriptor);
+    }
+
 }
 

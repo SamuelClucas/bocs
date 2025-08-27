@@ -69,7 +69,7 @@ impl ApplicationHandler<State> for App {
             // Need async context for requests using pollset
             // injected back into app through user event
             if let Some(prx) = self.proxy.take() {
-                let state = pollster::block_on(State::new(window.clone(), size)).expect("Couldn't get state");
+                let state = pollster::block_on(State::new(window.clone())).expect("Couldn't get state");
                 self.user_event(&event_loop,state);
             } // end of setup: go to App::user_event() :)
         }
@@ -106,7 +106,7 @@ impl ApplicationHandler<State> for App {
                                 y: position.y - mouse_down.y
                             };
                             // handle cursor move here
-                            state_.camera.update(Some(delta.x as f32), Some(delta.y as f32), None, None);
+                            state_.world.camera.update(Some(delta.x as f32), Some(delta.y as f32), None, None);
                             state_.mouse_down = Some(position);
                         }
                         else {
@@ -117,10 +117,10 @@ impl ApplicationHandler<State> for App {
             WindowEvent::MouseWheel { device_id: _device_id, delta, phase: _phase } => {
                     match delta {
                         MouseScrollDelta::PixelDelta(pos) => {
-                            state_.camera.update(None, None, Some(pos.y as f32), None);
+                            state_.world.camera.update(None, None, Some(pos.y as f32), None);
                         },
                         MouseScrollDelta::LineDelta(x, y) => {
-                            state_.camera.update(None, None, Some(y as f32), None);
+                            state_.world.camera.update(None, None, Some(y as f32), None);
                         }
                     }
             },
@@ -137,7 +137,7 @@ impl ApplicationHandler<State> for App {
             },
             WindowEvent::Resized(size) => {
                 self.size = Some(size);
-                state_.is_surface_configured = false;
+                state_.gfx_ctx.surface_configured = false;
                 match size {
                     PhysicalSize{width, height: _} => {
                         let texture_height = (width as f32 / self.aspect_ratio) as u32;
@@ -146,7 +146,7 @@ impl ApplicationHandler<State> for App {
             },       
             WindowEvent::RedrawRequested => {
                 match state_.render() {
-                    Ok(_) => {state_.window.request_redraw();},
+                    Ok(_) => {state_.gfx_ctx.window.request_redraw();},
                     Err(e) => {
                         println!("Unable to render {}", e);
                     }

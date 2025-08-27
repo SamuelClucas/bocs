@@ -20,8 +20,8 @@ use wgpu::TextureUsages;
 
 
 pub struct State {
-    gfx_ctx: GraphicsContext,
-    world: World,
+    pub gfx_ctx: GraphicsContext,
+    pub world: World,
     bridge: Bridge,
     resources: Resources,
     compute: Compute,
@@ -38,7 +38,7 @@ pub struct State {
 
 impl State {
     
-    pub async fn new(window: Arc<Window>, size: PhysicalSize<u32>) -> Result<Self, Box<dyn Error>> {
+    pub async fn new(window: Arc<Window>) -> Result<Self, Box<dyn Error>> {
         let mut gfx_ctx: = GraphicsContext::new(window).await?;
         let dims: Dims3 = [200, 200, 200];
         // World contains voxel_grid and camera
@@ -74,103 +74,18 @@ impl State {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        if width != self.surf_config.width || height != self.surf_config.height { 
-            println!("Resize called\n");
-            self.surf_config.width = width;
-            self.surf_config.height = height;
-            self.camera.update(None, None, None, Some(&PhysicalSize {width, height})); // TODO: REPLACE OPTIONS WITH ENUMS
-            self.surface.configure(&self.device, &self.surf_config);
-            self.is_surface_configured = true;
-        
-        let storage_texture = 
-            self.device.create_texture(&TextureDescriptor{
-            label: Some("Storage Texture"),
-            size: Extent3d {
-                width: width, 
-                height: height,
-                depth_or_array_layers: 1
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[wgpu::TextureFormat::Rgba8Unorm]
-        });
-        self.texture_view = storage_texture.create_view(&TextureViewDescriptor{
-            label: Some("Texture View"),
-            format: Some(wgpu::TextureFormat::Rgba8Unorm),
-            dimension: Some(wgpu::TextureViewDimension::D2),
-            usage: None,
-            aspect: wgpu::TextureAspect::All,
-            base_mip_level: 0,
-            mip_level_count: None,
-            base_array_layer: 0,
-            array_layer_count:None
-        });
+        println!("Resize called\n");
+        if width != self.gfx_ctx.surface_config.width || height != self.gfx_ctx.surface_config.height && width > 0 && height > 0 { 
+            println!("Resize if passed\n");
+            self.gfx_ctx.update_surface_config();
 
-        if let (Some(uniforms), 
-            Some(grid_a), 
-            Some(grid_b), 
-            Some(compute_bg_layout),
-            Some(render_bg_layout)) = (
-                &self.uniform_buffer, 
-                &self.voxel_grid_buffer_a, 
-                &self.voxel_grid_buffer_b, 
-                &self.compute_bind_group_layout,
-                &self.render_bind_group_layout) {
+            self.world.camera.update(None, None, None, Some(&PhysicalSize {width, height})); // TODO: REPLACE OPTIONS WITH ENUMS
 
-        let bind_group_descriptor = &wgpu::BindGroupDescriptor {
-            label: Some("Bind group descriptor"),
-            layout: compute_bg_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer(BufferBinding { 
-                    buffer: uniforms, 
-                    offset: 0, 
-                    size: NonZero::new((std::mem::size_of::<Uniforms>()) as u64)
-                }),
-            },
-            BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
-                    buffer:  grid_a,
-                    offset: 0,
-                    size: NonZero::new((std::mem::size_of::<f32>() as u32 * self.dims.i * self.dims.j * self.dims.k) as u64)
-            })
-            },
-            BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::Buffer(BufferBinding{ // actual voxel grid storage buffer @ binding 1
-                    buffer:  grid_b,
-                    offset: 0,
-                    size: NonZero::new((std::mem::size_of::<f32>() as u32 * self.dims.i * self.dims.j * self.dims.k) as u64)
-            })
-            },
-            BindGroupEntry {
-                binding: 3,
-                resource: wgpu::BindingResource::TextureView(&self.texture_view)
-            }
-            ]
-        };
+            self.resources.on_resize(&self.dims, width, height, &self.gfx_ctx, &self.world, &self.bridge);
 
-        self.resources = Some(self.device.create_bind_group(bind_group_descriptor));
- 
-        self.render_bind_group = Some(self.device.create_bind_group(&wgpu::BindGroupDescriptor{
-            label: Some("Render Bind Group"),
-            layout: render_bg_layout,
-            entries: &[BindGroupEntry{
-                binding: 0,
-                resource: wgpu::BindingResource::Sampler(&self.sampler)},
+            self.compute.on_resize(&self.dims, &self.gfx_ctx, &self.resources);
 
-                BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&self.texture_view)
-                }
-            ]
-            }));
-        }
-
+            self.render.on_resize(&self.gfx_ctx, &self.resources);
         }
     }   
 
@@ -178,12 +93,7 @@ impl State {
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         self.world.generate_bb_projection(&self.gfx_ctx);
 
-        // this owns the texture, wrapping it with some extra swapchain-related info
-        let output = self.surface.get_current_texture()?;
-        // this defines how the texture is interpreted (sampled) to produce the actual pixel outputs to the surface
-        // texel -> pixel
-        let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default()); // both associated with surface
-
+     
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Command Encoder")
         });

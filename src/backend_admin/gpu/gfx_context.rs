@@ -7,7 +7,7 @@ use anyhow::Result;
 use std::error::Error;
 
 pub struct GraphicsContext {
-    window: Arc<Window>,
+    pub window: Arc<Window>,
     pub size: PhysicalSize<u32>,
     instance: Instance,
     adapter: Adapter,
@@ -120,7 +120,7 @@ impl GraphicsContext {
         // this defines how the texture is interpreted (sampled) to produce the actual pixel outputs to the surface
         // texel -> pixel
         self.surface_texture_view = self.surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default()); // both associated with surface
-
+        self.surface_configured = true;
         Ok(
             size
         )

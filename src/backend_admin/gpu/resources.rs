@@ -117,6 +117,57 @@ impl Resources {
 
     }
 
+    pub fn on_resize(&mut self, dims: &Dims3, width: u32, height: u32, gfx_ctx: &GraphicsContext, world: &World, bridge: &Bridge){
+
+        self.storage_texture = gfx_ctx.device.create_texture(&TextureDescriptor{
+            label: Some("Storage Texture"),
+            size: Extent3d {
+                width: width, 
+                height: height,
+                depth_or_array_layers: 1
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[wgpu::TextureFormat::Rgba8Unorm]
+        });
+
+        self.texture_view = self.storage_texture.create_view(&TextureViewDescriptor{
+            label: Some("Texture View"),
+            format: Some(wgpu::TextureFormat::Rgba8Unorm),
+            dimension: Some(wgpu::TextureViewDimension::D2),
+            usage: None,
+            aspect: wgpu::TextureAspect::All,
+            base_mip_level: 0,
+            mip_level_count: None,
+            base_array_layer: 0,
+            array_layer_count:None
+        });
+
+        let unis = Uniforms {
+            window_dims: [width/2, height/2, 0, 0], // could update these via command encoder
+            dims: [self.dims[0], self.dims[1], self.dims[2], self.dims[0] * self.dims[1]],
+            bounding_box: [0, 0, 0, 0], // set in render() 
+            cam_pos: [world.camera.c[0], world.camera.c[1], world.camera.c[2], 0.0 as f32],
+            forward: [world.camera.f[0], world.camera.f[1], world.camera.f[2], 0.0 as f32],
+            centre: [world.camera.centre[0], world.camera.centre[1], world.camera.centre[2], 0.0 as f32],
+            up: [world.camera.u[0], world.camera.u[1], world.camera.u[2], 0.0 as f32],
+            right: [world.camera.r[0], world.camera.r[1], world.camera.r[2], 0.0 as f32],
+            timestep: [0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32],
+            seed: [bridge.rand_seed, 0, 0, 0],
+            flags: [1, 0, 0, 0]
+        };
+
+        self.uniforms = gfx_ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Uniform buffer"),
+            contents: unis.flatten_u8(),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+    }
+
 }
 
 #[repr(C)]
