@@ -90,27 +90,27 @@ impl ApplicationHandler<State> for App {
             WindowEvent::MouseInput { device_id, state, button } => {
                 match state {
                     ElementState::Pressed => {
-                        state_.mouse_is_pressed = true;
+                        state_.mouse_pressed = true;
                     },
                     ElementState::Released => {
-                        state_.mouse_is_pressed = false;
-                        state_.mouse_down = None;
+                        state_.mouse_pressed = false;
+                        state_.mouse_pressed_pos = None;
                     }
                 }
             },
             WindowEvent::CursorMoved { device_id: _device_id, position } => {
-                    if state_.mouse_is_pressed == true {
-                        if let Some(mouse_down) = state_.mouse_down{
+                    if state_.mouse_pressed == true {
+                        if let Some(mouse_pos) = state_.mouse_pressed_pos{
                             let delta = PhysicalPosition {
-                                x: position.x - mouse_down.x,
-                                y: position.y - mouse_down.y
+                                x: (position.x - mouse_pos.x) as f32,
+                                y: (position.y - mouse_pos.y) as f32
                             };
                             // handle cursor move here
-                            state_.world.camera.update(Some(delta.x as f32), Some(delta.y as f32), None, None);
-                            state_.mouse_down = Some(position);
+                            state_.world.camera.handle_rotate(delta.x, delta.y);
+                            state_.mouse_pressed_pos = Some(position);
                         }
                         else {
-                            state_.mouse_down = Some(position);
+                            state_.mouse_pressed_pos = Some(position); // always tracking mouse...
                         }
                     }
                 },

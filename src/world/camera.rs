@@ -1,5 +1,8 @@
 use winit::dpi::PhysicalSize;
-use crate::world::voxel_grid::{P2f, P2i, P3};
+use crate::world::voxel_grid::{P2i, P3};
+
+const DY_SENS: f32 = 0.0001;
+const DX_SENS: f32 = 0.00005; // half as sensitive x given typical display aspect ratio
 
 pub struct OrbitalCamera {
     pub c: P3, // where c is camera pos in world space, 
@@ -8,15 +11,34 @@ pub struct OrbitalCamera {
     pub r: P3, // where r is unit vector right from c, orthogonal to f and u (f X u)  
     pub centre: P3, // ASSUMES WINDOW EXISTS ON CAMERA INIT (check state.rs new())
     scroll_coeff: f32,
+    dx_sens: f32,
+    dy_sens: f32
 }
 
 impl OrbitalCamera {   
+    // BASIC UTILITY FUNCTIONS
+    pub fn normalise(a: &P3, mag: &f32) -> P3{
+        [a[0] / mag,
+        a[1] / mag,
+        a[2] / mag]
+    }
+    pub fn scale(a: &P3, k: &f32) -> P3{
+        [a[0] * k, a[1] * k, a[2] * k]
+    }
+    pub fn negate(a: &P3) -> P3{
+        [-a[0], -a[1], -a[2]]
+    }
+    pub fn add(a: &P3, b: &P3) -> P3{
+        [a[0] + b[0],
+        a[1] + b[1],
+        a[2] + b[2]]
+    }
     // returns right-handed, orthogonal vector to a, b
     pub fn cross(a: &P3, b: &P3) -> P3 {
         [
-            (a[1] * b[2]) - (a[2] * b[1]), // x
-            (a[2] * b[0]) - (a[0] * b[2]), // y
-            (a[0] * b[1]) - (a[1] * b[0]) // z
+            (a[1] * b[2]) - (a[2] * b[1]), // x i r 
+            (a[2] * b[0]) - (a[0] * b[2]), // y j u
+            (a[0] * b[1]) - (a[1] * b[0]) // z k f
         ]
     }
     // returns scalar sum of component-wise products of a and b
@@ -38,7 +60,7 @@ impl OrbitalCamera {
         ]
     }
     pub fn ruf_to_ru_plane(&self, input: &P3, r_scale: &f32) -> P2i {
-        let normalised = OrbitalCamera::normalise(input.clone(), OrbitalCamera::magnitude(input));
+        let normalised = OrbitalCamera::normalise(input, &OrbitalCamera::magnitude(input));
         let centre_mag = OrbitalCamera::magnitude(&self.centre); // scale factor for F and U
 
         let up_multiplier = centre_mag/normalised[2];
@@ -50,34 +72,63 @@ impl OrbitalCamera {
 
         [ right_pixels as i32, up_pixels as i32]
     }
+    pub fn sin(a: P3) -> P3 {
+        [a[0].sin(),
+        a[1].sin(),
+        a[2].sin()]
+        
+    }
+    pub fn cosine(a: P3) -> P3 {
+        [a[0].cos(),
+        a[1].cos(),
+        a[2].cos()]
+        
+    }
+    /// Order of rotation matters, so only this function is exposed externally to handle camera rotations
+    /// to ensure order is always preserved
+    pub fn handle_rotate(&mut self, dx: f32, dy: f32){
+        self.rotate_up(dx); 
+        self.rotate_right(dy);
+        self.orthonormalise();
+    }
 
-    pub fn normalise(mut a: P3, mag: f32) -> P3{
-        a[0] /= mag;
-        a[1] /= mag;
-        a[2] /= mag;
-        a
+    /// Rotate about Up vector (i.e. yaw) takes mouse x deltas
+    fn rotate_up(&mut self, dx: f32) {
+        // Up == Up
+        let coef_sin = (dx * self.dx_sens).sin();
+        let coef_cos = (dx * self.dx_sens).cos();
+        let old_r = self.r.clone();
+        let old_f = self.f.clone();
+        self.r = OrbitalCamera::add(&OrbitalCamera::scale(&old_f, &coef_sin), &OrbitalCamera::scale(&old_r, &coef_cos));
+        self.f = OrbitalCamera::add(&OrbitalCamera::scale(&old_r, &-coef_sin), &OrbitalCamera::scale(&old_f, &coef_cos));
     }
-    pub fn scale(mut a: P3, k: f32) -> P3{
-        a[0] *= k;
-        a[1] *= k;
-        a[2] *= k;
-        a
+
+    /// Rotate about Right vector (i.e. pitch) takes mouse y deltas
+    pub fn rotate_right(&mut self, dy: f32) { // CHECK THESE FOR INSITU MESS
+        // Right == Right
+        let coef_sin = (dy * self.dy_sens).sin();
+        let coef_cos = (dy * self.dy_sens).cos();
+        let old_u = self.u.clone();
+        let old_f = self.f.clone();
+        self.u = OrbitalCamera::add(&OrbitalCamera::scale(&old_u, &coef_cos), &OrbitalCamera::scale(&old_f, &-coef_sin));
+        self.f = OrbitalCamera::add(&OrbitalCamera::scale(&old_f, &coef_cos), &OrbitalCamera::scale(&old_u, &coef_sin));
     }
-    pub fn negate(mut a: P3) -> P3{
-        a[0] = -a[0];
-        a[1] = -a[1];
-        a[2] = -a[2];
-        a
+
+    pub fn orthonormalise(&mut self) {
+        self.r = OrbitalCamera::normalise(&self.r, &OrbitalCamera::magnitude(&self.r));
+        self.u = OrbitalCamera::normalise(&self.u, &OrbitalCamera::magnitude(&self.u));
+
+        self.f = OrbitalCamera::cross(&self.r, &self.u);
+        self.f = OrbitalCamera::normalise(&self.f, &OrbitalCamera::magnitude(&self.f)); // norm in case r and u not at 90 deg
+
+        self.r = OrbitalCamera::cross(&self.u, &self.f);
+        // normalising just for sureness
+        self.r = OrbitalCamera::normalise(&self.r, &OrbitalCamera::magnitude(&self.r));
     }
-    pub fn add( mut a: P3, b: P3) -> P3{
-        a[0] += b[0];
-        a[1] += b[1];
-        a[2] += b[2];
-        a
-    }
+
     /// recompute ruf basis vectors on camera movement
     /// TODO: implement angle-based mapping of dx and dy into world deltas to avoid normalisation error drift
-    pub fn update(&mut self, dx: Option<f32>, dy: Option<f32>, dscroll: Option<f32>, size: Option<&PhysicalSize<u32>>) {
+    pub fn update(&mut self, dx: Option<f32>, dy: Option<f32>, dscroll: Option<f32>, size: Option<&PhysicalSize<u32>>) { // kitchen sink vibes...
         // HANDLE ZOOM
         let multiplier_to_surface = if let Some(d_scroll) = dscroll{
             let old_mag = Self::magnitude(&self.c);
@@ -164,7 +215,9 @@ impl OrbitalCamera {
         f: forward, 
         u: up, 
         r: right,
-        centre: centre
+        centre: centre,
+        dx_sens: DX_SENS,
+        dy_sens: DY_SENS
     }
 
     }

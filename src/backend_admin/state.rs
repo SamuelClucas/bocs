@@ -24,8 +24,8 @@ pub struct State {
     read_ping: bool,
     time: std::time::Instant,
 
-    pub mouse_is_pressed: bool,
-    pub mouse_down: Option<PhysicalPosition<f64>>,
+    pub mouse_pressed: bool,
+    pub mouse_pressed_pos: Option<PhysicalPosition<f64>>,
 }
 
 impl State {
@@ -39,7 +39,7 @@ impl State {
         // Bridge holds rand seed and maintains dispatch dims for raymarch and laplacian
         let bridge = Bridge::new(&world.voxel_grid, &gfx_ctx);
 
-        let resources = Resources::new(&dims, &world, &bridge, &mut gfx_ctx)?;
+        let resources = Resources::new(&dims, &world, &bridge, &mut gfx_ctx);
         
         let compute = Compute::new(&dims, &resources, &gfx_ctx);
         
@@ -59,8 +59,8 @@ impl State {
                 dims: dims,
                 time: std::time::Instant::now(),
 
-                mouse_is_pressed: false,
-                mouse_down: None
+                mouse_pressed: false,
+                mouse_pressed_pos: None
                 }
         )
     }
