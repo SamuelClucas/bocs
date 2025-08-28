@@ -24,7 +24,7 @@ impl World {
 
     /// Projects 8 P3 vertices of VoxelGrid onto camera's near plane as 4 P2s
     /// This is the minimum enclosing square for the voxel_grid (bounding box)
-    pub fn generate_bb_projection(&self, gfx_ctx: &GraphicsContext) {
+    pub fn generate_bb_projection(&mut self, gfx_ctx: &GraphicsContext) {
         // First: convert from pixels into world units
         let (w, h) = (gfx_ctx.size.width as i32, gfx_ctx.size.height as i32);
 

@@ -1,23 +1,15 @@
 use winit::{dpi::{PhysicalPosition, PhysicalSize}, window::Window};
-use core::f32;
-use std::{num::NonZero, sync::Arc};
+use std::{sync::Arc};
 use crate::{
     backend_admin::{
         bridge::Bridge, 
         gpu::{
-            builders::BindGroupLayoutBuilder, compute::Compute, gfx_context::GraphicsContext, render::Render, resources::Resources}}, 
+            compute::Compute, gfx_context::GraphicsContext, render::Render, resources::Resources}}, 
     world::{
-        camera::OrbitalCamera, 
         voxel_grid::Dims3, 
-        world::{BoundingBox, World}}
+        world::{World}}
     };
-use anyhow::{Result};
-use wgpu::{wgt::TextureDescriptor, BindGroup, BindGroupEntry, BindGroupLayout, BufferBinding, ComputePipeline, Extent3d, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
-
 use std::error::Error;
-use wgpu::TextureUsages;
-
-
 
 pub struct State {
     pub gfx_ctx: GraphicsContext,
@@ -39,7 +31,7 @@ pub struct State {
 impl State {
     
     pub async fn new(window: Arc<Window>) -> Result<Self, Box<dyn Error>> {
-        let mut gfx_ctx: = GraphicsContext::new(window).await?;
+        let mut gfx_ctx: GraphicsContext = GraphicsContext::new(window).await?;
         let dims: Dims3 = [200, 200, 200];
         // World contains voxel_grid and camera
         let world = World::new(dims, &gfx_ctx);
@@ -92,6 +84,11 @@ impl State {
 
     
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        let surface_texture = self.gfx_ctx.surface.get_current_texture()?;
+        // this defines how the texture is interpreted (sampled) to produce the actual pixel outputs to the surface
+        // texel -> pixel
+        let surface_texture_view = surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default()); // both associated with surface
+
         self.world.generate_bb_projection(&self.gfx_ctx); 
 
         let mut encoder = self.gfx_ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -158,7 +155,7 @@ impl State {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment { // framebuffer
                     depth_slice: None,
-                    view: &self.gfx_ctx.surface_texture_view,
+                    view: &surface_texture_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -182,7 +179,7 @@ impl State {
         
         // submit will accept anything that implements IntoIter
         self.gfx_ctx.queue.submit(std::iter::once(encoder.finish())); // allowing encoder call here
-        self.gfx_ctx.surface_texture.present();
+        surface_texture.present();
     
         Ok(())
 

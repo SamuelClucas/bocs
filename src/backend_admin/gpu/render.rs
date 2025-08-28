@@ -2,7 +2,8 @@ use wgpu::{BindGroup, BindGroupEntry, BindGroupLayout, PipelineLayout, PipelineL
 use crate::{backend_admin::gpu::{
     builders::BindGroupLayoutBuilder,
     gfx_context::GraphicsContext,
-    resources::Resources}, world::{self, voxel_grid::Dims3}};
+    resources::Resources}
+};
 
 pub struct Render{
     frag_shader: ShaderModule,

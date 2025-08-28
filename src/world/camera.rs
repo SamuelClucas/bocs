@@ -1,5 +1,5 @@
 use winit::dpi::PhysicalSize;
-use crate::world::voxel_grid::{P3};
+use crate::world::voxel_grid::{P2f, P2i, P3};
 
 pub struct OrbitalCamera {
     pub c: P3, // where c is camera pos in world space, 
@@ -37,7 +37,7 @@ impl OrbitalCamera {
                 Self::dot(&offset, &self.f) // forward
         ]
     }
-    pub fn ruf_to_ru_plane(&self, input: &P3, r_scale: &f32) -> P2 {
+    pub fn ruf_to_ru_plane(&self, input: &P3, r_scale: &f32) -> P2i {
         let normalised = OrbitalCamera::normalise(input.clone(), OrbitalCamera::magnitude(input));
         let centre_mag = OrbitalCamera::magnitude(&self.centre); // scale factor for F and U
 
@@ -48,7 +48,7 @@ impl OrbitalCamera {
         let up_pixels = normalised[1] * up_multiplier; 
         let right_pixels =  normalised[0] * up_multiplier * r_scale;
 
-        [ right_pixels, up_pixels ]
+        [ right_pixels as i32, up_pixels as i32]
     }
 
     pub fn normalise(mut a: P3, mag: f32) -> P3{

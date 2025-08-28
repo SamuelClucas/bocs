@@ -122,7 +122,7 @@ impl Compute {
         let laplacian_pipeline = gfx_ctx.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Laplacian"),   
             layout: Some(&pipeline_layout),
-            module: &init,
+            module: &laplacian,
             entry_point: Some("laplacian"),
             cache: None,
             compilation_options: PipelineCompilationOptions{
@@ -134,7 +134,7 @@ impl Compute {
         let raymarch_pipeline = gfx_ctx.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Raymarch"),
             layout: Some(&pipeline_layout),
-            module: &init,
+            module: &raymarch,
             entry_point: Some("raymarch"),
             cache: None,
             compilation_options: PipelineCompilationOptions{

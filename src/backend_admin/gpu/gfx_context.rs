@@ -13,8 +13,6 @@ pub struct GraphicsContext {
     adapter: Adapter,
 
     pub surface: Surface<'static>,
-    pub surface_texture: SurfaceTexture,
-    pub surface_texture_view: TextureView,
     pub surface_config: SurfaceConfiguration,
     pub surface_configured: bool,
 
@@ -67,13 +65,6 @@ impl GraphicsContext {
         };
         surface.configure(&device, &surface_config);
 
-        // this owns the texture, wrapping it with some extra swapchain-related info
-        let output = surface.get_current_texture()?;
-        // this defines how the texture is interpreted (sampled) to produce the actual pixel outputs to the surface
-        // texel -> pixel
-        let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default()); // both associated with surface
-
-
         Ok (
             GraphicsContext {
                 window: win,
@@ -82,8 +73,6 @@ impl GraphicsContext {
                 adapter: adapter,
 
                 surface: surface,
-                surface_texture: output,
-                surface_texture_view: view,
                 surface_config: surface_config,
                 surface_configured: true,
 
@@ -115,11 +104,7 @@ impl GraphicsContext {
         };
         self.surface.configure(&self.device, &self.surface_config);
 
-        // this owns the texture, wrapping it with some extra swapchain-related info
-        self.surface_texture = self.surface.get_current_texture()?;
-        // this defines how the texture is interpreted (sampled) to produce the actual pixel outputs to the surface
-        // texel -> pixel
-        self.surface_texture_view = self.surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default()); // both associated with surface
+        
         self.surface_configured = true;
         Ok(
             size

@@ -19,26 +19,26 @@ var<uniform> uniforms: Uniforms;
 @group(0) @binding(1)
 var<storage, read_write> grid_a: array<f32>;
 
-
 @group(0) @binding(2)
 var<storage, read_write> grid_b: array<f32>;
 
 @group(0) @binding(3)
 var output_tex: texture_storage_2d<rgba8unorm, write>; 
 
-// CONSTS AND SHARED MEMORY
+// CONSTS
 const ray_group: u32 = 16; 
 
 
 @compute @workgroup_size(ray_group, ray_group)
 fn raymarch(@builtin(global_invocation_id) gid: vec3<u32>) {
+    
+    // if (gid.x == 0u && gid.y == 0u) {
+    //  textureStore(output_tex, vec2<u32>(10u, 10u), vec4f(1.0, 0.0, 0.0, 1.0));
+    // return;
+    //}
+
     // no bounds check here beucase dispatch only launched for threads in bounding box
     // first undo horizontal scaling of bounding box (later, scaled version is still used to write to texture)
-    if (gid.x == 0u && gid.y == 0u) {
-    textureStore(output_tex, vec2<u32>(10u, 10u), vec4f(1.0, 0.0, 0.0, 1.0));
-    // no early return; but fine if you add one
-    return;
-    }
     let screen_to_world = vec2<f32>(
         f32(uniforms.bounding_box.x) / uniforms.right.w, // steps left from centre
         f32(uniforms.bounding_box.y) // steps down from centre

@@ -34,6 +34,8 @@ const shared_x: u32 = group_x + 2;
 const shared_y: u32 = group_y + 2;
 const shared_z: u32 = group_z + 2;
 
+var<workgroup> shared_cells: array<f32, shared_x * shared_y * shared_z>;
+
 
 // COLLABORATIVE LOADING AND LAPLACIAN STENCIL
 // WORKGROUP DIMS + 2 = SHARED MEMORY CUBOID WITH HALO
