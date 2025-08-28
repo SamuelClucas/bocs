@@ -5,7 +5,6 @@ use crate::{backend_admin::{
 use wgpu::{Buffer, BufferUsages, Extent3d, Sampler, Texture, TextureDescriptor, TextureUsages, TextureView, TextureViewDescriptor};
 use wgpu::util::DeviceExt;
 use winit::dpi::PhysicalSize;
-use std::error::Error;
 
 
 pub struct Resources {
@@ -18,11 +17,11 @@ pub struct Resources {
 }
 
 impl Resources {
-    pub fn new(dims: &Dims3, world: &World, bridge: &Bridge, gfx_ctx: &mut GraphicsContext) -> Result<Self, Box<dyn Error>> {
+    pub fn new(dims: &Dims3, world: &World, bridge: &Bridge, gfx_ctx: &mut GraphicsContext) -> Self {
 
         let size = if gfx_ctx.surface_configured {
              PhysicalSize::new(gfx_ctx.surface_config.width, gfx_ctx.surface_config.height) }
-             else { gfx_ctx.update_surface_config()? };
+             else { gfx_ctx.update_surface_config() };
 
         let ping_voxels = gfx_ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Compute store a"),
@@ -101,16 +100,15 @@ impl Resources {
             border_color: None
         });
 
-        Ok(
-            Resources {
-                sampler: sampler,
-                ping_voxel_buffer: ping_voxels,
-                pong_voxel_buffer: pong_voxels,
-                storage_texture: storage_texture,
-                texture_view: texture_view,
-                uniforms: uniforms
-            }
-        )
+
+        Resources {
+            sampler: sampler,
+            ping_voxel_buffer: ping_voxels,
+            pong_voxel_buffer: pong_voxels,
+            storage_texture: storage_texture,
+            texture_view: texture_view,
+            uniforms: uniforms
+        }
 
     }
 

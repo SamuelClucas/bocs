@@ -2,7 +2,7 @@ use std::{sync::Arc};
 use winit::{
     dpi::PhysicalSize,
     window::Window};
-use wgpu::{Adapter, Device, Instance, Queue, Surface, SurfaceConfiguration, SurfaceTexture, TextureView};
+use wgpu::{Adapter, Device, Instance, Queue, Surface, SurfaceConfiguration};
 use anyhow::Result;
 use std::error::Error;
 
@@ -82,7 +82,7 @@ impl GraphicsContext {
         )
     }
 
-    pub fn update_surface_config(&mut self) -> Result<PhysicalSize<u32>, Box<dyn Error>> {
+    pub fn update_surface_config(&mut self) -> PhysicalSize<u32> {
         let surface_caps = self.surface.get_capabilities(&self.adapter);
 
         let surface_format = surface_caps.formats.iter()
@@ -106,10 +106,8 @@ impl GraphicsContext {
 
         
         self.surface_configured = true;
-        Ok(
-            size
-        )
 
+        size
     }
 
 }
