@@ -9,10 +9,10 @@ pub struct Render{
     vert_shader: ShaderModule,
 
     bg_layout: BindGroupLayout,
-    bg: BindGroup,
+    pub bg: BindGroup,
 
     p_layout: PipelineLayout,
-    p: RenderPipeline,
+    pub p: RenderPipeline,
 }
 
 impl Render {

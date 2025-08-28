@@ -113,21 +113,24 @@ impl State {
         self.resources.uniforms_refresh(&self.gfx_ctx, &self.read_ping, duration, self.world.bbox, &self.dims, &self.world);
 
         if !self.init_complete {
-        {   // INIT
+        {   
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor{
                 label: Some("Init"),
                 timestamp_writes: None
                 });
 
-            compute_pass.set_pipeline(self.init_pipeline.as_ref().unwrap());
-            compute_pass.set_bind_group(0, self.resources.as_ref().unwrap(), &[]); 
-            compute_pass.dispatch_workgroups((self.dims.i/8) + self.i_ceil, (self.dims.j/4) + self.j_ceil, (self.dims.k/8) + self.k_ceil);  // group size is 8 * 4 * 8 <= 256 (256, 256, 64 respective limits)
+            // RAND SEED INIT
+            compute_pass.set_pipeline(&self.compute.init_p);
+            compute_pass.set_bind_group(0, &self.compute.bg, &[]); 
+            let [x, y, z] = self.bridge.init_dispatch;
+            compute_pass.dispatch_workgroups(x, y, z);  // group size is 8 * 4 * 8 <= 256 (256, 256, 64 respective limits)
             self.init_complete = true;
-            // Raymarch
-            compute_pass.set_pipeline(&self.raymarch_pipeline);
-            compute_pass.set_bind_group(0, self.resources.as_ref().unwrap(), &[]); 
-            let [dispatch_x, dispatch_y, z] = self.bridge.raymarch_dispatch;
-            compute_pass.dispatch_workgroups(dispatch_x, dispatch_y, z); 
+
+            // RAYMARCH
+            compute_pass.set_pipeline(&self.compute.raymarch_p);
+            compute_pass.set_bind_group(0, &self.compute.bg, &[]); 
+            let [x, y, z] = self.bridge.raymarch_dispatch;
+            compute_pass.dispatch_workgroups(x, y, z); 
         }
         }
         else {
@@ -138,14 +141,15 @@ impl State {
                 });
     
 
-            compute_pass.set_pipeline(self.laplacian_pipeline.as_ref().unwrap());
-            compute_pass.set_bind_group(0, self.resources.as_ref().unwrap(), &[]); 
-            compute_pass.dispatch_workgroups((self.dims.i/8) + self.i_ceil, (self.dims.j/4) + self.j_ceil, (self.dims.k/8) + self.k_ceil);  // group size is 8 * 4 * 8 <= 256 (256, 256, 64 respective limits)
+            compute_pass.set_pipeline(&self.compute.laplacian_p);
+            compute_pass.set_bind_group(0, &self.compute.bg, &[]); 
+             let [x, y, z] = self.bridge.laplacian_dispatch;
+            compute_pass.dispatch_workgroups(x, y, z);  // group size is 8 * 4 * 8 <= 256 (256, 256, 64 respective limits)
             // Raymarch
-            compute_pass.set_pipeline(&self.raymarch_pipeline);
-            compute_pass.set_bind_group(0, self.resources.as_ref().unwrap(), &[]); 
-            let [dispatch_x, dispatch_y, z] = self.bridge.raymarch_dispatch;
-            compute_pass.dispatch_workgroups(dispatch_x, dispatch_y, z);
+            compute_pass.set_pipeline(&self.compute.raymarch_p);
+            compute_pass.set_bind_group(0, &self.compute.bg, &[]); 
+            let [x, y, z] = self.bridge.raymarch_dispatch; 
+            compute_pass.dispatch_workgroups(x, y, z);
             }
         }
         
@@ -154,7 +158,7 @@ impl State {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment { // framebuffer
                     depth_slice: None,
-                    view: &view,
+                    view: &self.gfx_ctx.surface_texture_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -171,8 +175,8 @@ impl State {
                 timestamp_writes: None,
             });
 
-            render_pass.set_pipeline(self.pipeline.as_ref().unwrap());
-            render_pass.set_bind_group(0, Some(self.render_bind_group.as_ref().unwrap()), &[]);
+            render_pass.set_pipeline(&self.render.p);
+            render_pass.set_bind_group(0, Some(&self.render.bg), &[]);
             render_pass.draw(0..6, 0..1);
         } // encoder borrow dropped here
         

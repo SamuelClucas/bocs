@@ -12,6 +12,11 @@ struct Uniforms{
     flags: vec4<u32> // [0] reada flag 1 true, 0 false
 }
 
+// CONSTS
+const group_x: u32 = 8;
+const group_y: u32 = 4;
+const group_z: u32 = 8;
+
 // BINDINGS
 @group(0) @binding(0)
 var<uniform> uniforms: Uniforms;

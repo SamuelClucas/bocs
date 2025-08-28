@@ -16,12 +16,12 @@ pub struct Compute{
     raymarch_shader: ShaderModule,
 
     bg_layout: BindGroupLayout,
-    bg: BindGroup,
+    pub bg: BindGroup,
 
     p_layout: PipelineLayout,
-    init_p: ComputePipeline,
-    laplacian_p: ComputePipeline,
-    raymarch_p: ComputePipeline
+    pub init_p: ComputePipeline,
+    pub laplacian_p: ComputePipeline,
+    pub raymarch_p: ComputePipeline
     
 }
 
@@ -142,10 +142,6 @@ impl Compute {
                 zero_initialize_workgroup_memory: true 
             }
         });
-
-
-        
-    
 
             Compute {
                 init_shader: init,

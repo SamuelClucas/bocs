@@ -17,6 +17,7 @@ pub struct Bridge {
     pub raymarch_dispatch: DispatchDims,
 
     pub laplacian_dispatch: DispatchDims,
+    pub init_dispatch: DispatchDims, // THIS IS THE SAME AS LAPLACIAN, but added as a separate field for clarity in state::render()
 
     pub rand_seed: u32
 }
@@ -45,6 +46,7 @@ impl Bridge {
             raymarch_dispatch: raymarch_dispatch,
 
             laplacian_dispatch: laplacian_dispatch,
+            init_dispatch: laplacian_dispatch,
 
             rand_seed: seed
         }
