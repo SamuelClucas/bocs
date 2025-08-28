@@ -9,7 +9,7 @@ use crate::{
     world::{
         camera::OrbitalCamera, 
         voxel_grid::Dims3, 
-        world::World}
+        world::{BoundingBox, World}}
     };
 use anyhow::{Result};
 use wgpu::{wgt::TextureDescriptor, BindGroup, BindGroupEntry, BindGroupLayout, BufferBinding, ComputePipeline, Extent3d, PipelineCompilationOptions, PipelineLayoutDescriptor, ShaderModuleDescriptor, ShaderStages, TextureFormat, TextureView, TextureViewDescriptor};
@@ -79,7 +79,8 @@ impl State {
             println!("Resize if passed\n");
             self.gfx_ctx.update_surface_config();
             self.world.camera.update(None, None, None, Some(&PhysicalSize {width, height})); // TODO: REPLACE OPTIONS WITH ENUMS
-            self.bridge.update_raymarch_dispatch(self.world.generate_bb_projection(&self.gfx_ctx));
+
+            self.bridge.update_raymarch_dispatch(self.world.bbox);
 
             self.resources.on_resize(&self.dims, width, height, &self.gfx_ctx, &self.world, &self.bridge);
 
@@ -91,10 +92,9 @@ impl State {
 
     
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        self.world.generate_bb_projection(&self.gfx_ctx);
+        self.world.generate_bb_projection(&self.gfx_ctx); 
 
-     
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        let mut encoder = self.gfx_ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Command Encoder")
         });
 
@@ -105,27 +105,12 @@ impl State {
         //println!("fps: {}\n", fps);
         self.time = now;
 
-        self.read_a = if self.init_complete{ !self.read_a}
-        else { self.read_a};
+        // Ping pong flag
+        self.read_ping = if self.init_complete{ !self.read_ping }
+        else { self.read_ping };
 
-        let uniforms = Uniforms {
-            window_dims: [self.surf_config.width/2, self.surf_config.height/2, 0, 0],
-            dims: [self.dims.i as u32, self.dims.j as u32, self.dims.k as u32, (self.dims.i * self.dims.j) as u32],
-            bounding_box: [bounding_box[0], bounding_box[1], bounding_box[2], bounding_box[3]],
-            cam_pos: [self.camera.c[0], self.camera.c[1], self.camera.c[2], 0.0 as f32],
-            forward: [self.camera.f[0], self.camera.f[1], self.camera.f[2], 0.0 as f32],
-            centre: [self.camera.centre[0], self.camera.centre[1], self.camera.centre[2], 0.0 as f32],
-            up: [self.camera.u[0], self.camera.u[1], self.camera.u[2], 0.0 as f32],
-            right: [self.camera.r[0], self.camera.r[1], self.camera.r[2], right_scale],
-            timestep: [duration, 0.0 as f32, 0.0 as f32, 0.0 as f32],
-            seed: [0.0, 0.0 as f32, 0.0 as f32, 0.0 as f32], // could later reintroduce seed here for hot sim resizing 
-            flags: [self.read_a as u32, 0, 0, 0]
-        };
-
-        let uniforms = uniforms.flatten_u8();
-        self.gfx_ctx.queue.write_buffer(self.uniform_buffer.as_ref().unwrap(), 0, uniforms);
-
-        // UPDATE TIMESTEP COMPLETE //
+        // UPDATE AND WRITE NEW UNIFORMS BUFFER TO QUEUE
+        self.resources.uniforms_refresh(&self.gfx_ctx, &self.read_ping, duration, self.world.bbox, &self.dims, &self.world);
 
         if !self.init_complete {
         {   // INIT

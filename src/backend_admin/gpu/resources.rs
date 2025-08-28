@@ -1,9 +1,6 @@
 use crate::{backend_admin::{
-    gpu::gfx_context::GraphicsContext, 
-    bridge::Bridge},
-    world::{
-        world::World,
-        voxel_grid::{Dims3}
+    bridge::Bridge, gpu::gfx_context::GraphicsContext},
+    world::{voxel_grid::Dims3, world::{BoundingBox, World}
     }};
 use wgpu::{Buffer, BufferUsages, Extent3d, Sampler, Texture, TextureDescriptor, TextureUsages, TextureView, TextureViewDescriptor};
 use wgpu::util::DeviceExt;
@@ -164,11 +161,49 @@ impl Resources {
             label: Some("Uniform buffer"),
             contents: unis.flatten_u8(),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
+            });
+
+        
 
     }
 
-}
+    pub fn uniforms_refresh(&mut self, 
+        gfx_ctx: &GraphicsContext, read_ping: &bool, 
+        duration: f32, bbox: BoundingBox, dims: &Dims3, 
+        world: &World) {
+        if gfx_ctx.surface_configured == true {
+
+            let uniforms = Uniforms {
+                window_dims: [gfx_ctx.surface_config.width/2, gfx_ctx.surface_config.height/2, 0, 0],
+                dims: [dims[0], dims[1], dims[2], dims[0] * dims[1]],
+                bounding_box: [bbox[0][0], bbox[0][1], bbox[1][0], bbox[1][1]],
+                cam_pos: [world.camera.c[0], world.camera.c[1], world.camera.c[2], 0.0],
+                forward: [world.camera.f[0], world.camera.f[1], world.camera.f[2], 0.0],
+                centre: [world.camera.centre[0], world.camera.centre[1], world.camera.centre[2], 0.0],
+                up: [world.camera.u[0], world.camera.u[1], world.camera.u[2], 0.0 as f32],
+                right: [world.camera.r[0], world.camera.r[1], world.camera.r[2], world.right_sf],
+                timestep: [duration, 0.0, 0.0, 0.0],
+                seed: [0, 0, 0, 0 ], // could later reintroduce seed here for hot sim resizing 
+                flags: [*read_ping as u32, 0, 0, 0]
+            };
+
+            let data = uniforms.flatten_u8();
+
+            self.uniforms = gfx_ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Uniform buffer"),
+            contents: data,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            });
+
+            gfx_ctx.queue.write_buffer(&self.uniforms, 0, data);
+        }
+        else { panic!("Tried to update uniforms with outdated graphics context\n") }
+
+    }
+
+    }
+
+
 
 #[repr(C)]
 #[derive(Clone, Copy)]

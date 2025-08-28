@@ -17,7 +17,6 @@ pub struct Render{
 
 impl Render {
     pub fn new(resources: &Resources, gfx_ctx: &GraphicsContext) -> Self {
-
         // Load shader modules //
         let f_module = gfx_ctx.device.create_shader_module(ShaderModuleDescriptor{
             label: Some("Fragment shader module"),
@@ -55,7 +54,6 @@ impl Render {
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[]
         });
-
 
         let pipeline = gfx_ctx.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor { 
             label: Some("Render Pipeline"), 

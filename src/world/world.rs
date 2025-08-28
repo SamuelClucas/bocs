@@ -1,9 +1,11 @@
-use crate::{backend_admin::gpu::gfx_context::GraphicsContext, world::{camera::OrbitalCamera, voxel_grid::{P2i, Square, Access, SystemGet, SystemSet, VoxelGrid, Dims3, P3}}};
+use crate::{backend_admin::gpu::gfx_context::GraphicsContext, world::{camera::OrbitalCamera, voxel_grid::{P2i, Access, SystemGet, SystemSet, VoxelGrid, Dims3, P3}}};
 
 /// Manages all World entities
 pub struct World {
     pub voxel_grid: VoxelGrid,
-    pub camera: OrbitalCamera
+    pub bbox: BoundingBox,
+    pub camera: OrbitalCamera,
+    pub right_sf: f32
 }
 
 pub type BoundingBox = [P2i; 2];
@@ -14,23 +16,25 @@ impl World {
         let cam_init: P3 = [d[0] as f32 * 2.0, 0.0, 0.0];
         World {
             voxel_grid: VoxelGrid::new_centered_at_origin(d),
-            camera: OrbitalCamera::new(cam_init, &gfx_ctx.size)
+            bbox: BoundingBox::default(),
+            camera: OrbitalCamera::new(cam_init, &gfx_ctx.size),
+            right_sf: 0.0
         }
     }
 
     /// Projects 8 P3 vertices of VoxelGrid onto camera's near plane as 4 P2s
     /// This is the minimum enclosing square for the voxel_grid (bounding box)
-    pub fn generate_bb_projection(&self, gfx_ctx: &GraphicsContext) -> BoundingBox {
+    pub fn generate_bb_projection(&self, gfx_ctx: &GraphicsContext) {
         // First: convert from pixels into world units
         let (w, h) = (gfx_ctx.size.width as i32, gfx_ctx.size.height as i32);
 
         let centre_top = h / 2; // 1:1 vertical pixels and up vector
-        let r_sf = (w / 2) / centre_top; // Right vector's scaling factor from pixels to world garantees FOV 90 in vertical
+        self.right_sf = (w as f32 / 2.0) / centre_top as f32; // Right vector's scaling factor from pixels to world garantees FOV 90 in vertical
 
-        println!("Right scale: {}", r_sf);
-        let centre_right = centre_top * r_sf; // Opp = tan(theta) * adj
+        println!("Right scale: {}", self.right_sf);
+        let centre_right = centre_top as f32 * self.right_sf; // Opp = tan(theta) * adj
         
-        let bounding_box = { 
+        self.bbox = { 
             let mut max_r = f32::NEG_INFINITY;
             let mut max_u = f32::NEG_INFINITY;
             let mut min_r = f32::INFINITY;
@@ -47,7 +51,7 @@ impl World {
                 // PROJECT ONTO NEAR PLANE
                 match self.voxel_grid.get_vertex_at(SystemGet::RUF(i)) {
                     SystemSet::RUF(point) => {
-                        let projection = self.camera.ruf_to_ru_plane(&point, &(r_sf as f32));
+                        let projection = self.camera.ruf_to_ru_plane(&point, &(self.right_sf));
                         self.voxel_grid.set_vertex_at(SystemGet::SQUARE(i), SystemSet::SQUARE(projection));
                     },
                     _ => { println!("Couldn't get voxelgrid RUF vertex.\n"); }
@@ -69,8 +73,6 @@ impl World {
                 [(max_r + 1.0).min(centre_right as f32) as i32, (max_u + 1.0).min(centre_top as f32) as i32]
             ]
         };
-
-        bounding_box
 
     }
 }
