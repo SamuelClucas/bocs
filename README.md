@@ -25,8 +25,6 @@ Expect:
 
 The field of computational biology is undergoing a revolution. With breakthroughs like [AlphaFold](https://alphafold.ebi.ac.uk/) showing the power of machine learning in structural prediction, the horizon has shifted. What else might we simulate? Can we push into domains where wet-lab work is expensive or inaccessible?
 
-**I believe the answer is yes.**
-
 I'm particularly interested in questions like:
 
 * How does membrane curvature arise from local lipid composition or protein activity?
@@ -34,7 +32,7 @@ I'm particularly interested in questions like:
 * How can we develop a fully integrated cellular model — from genome to phenotype — that exhibits real, *in-vivo* behaviour?
 * Can such a model be used in conjunction with wet-lab experimentation to accelerate research?
 
-Ultimately, I'd love to successfully recapitulate cellular processes *in silico*.
+The project is building toward recapitulating cellular processes *in silico*.
 
 
 ## My Background
